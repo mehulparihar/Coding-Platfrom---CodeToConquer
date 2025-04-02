@@ -2,8 +2,9 @@ import axios from "axios";
 import Submission from "../models/submission.model.js";
 import Problems from "../models/problem.model.js";
 import { client } from "../lib/redis.js"
-import { lpushAsync } from "../lib/redis.js";
+import { connectQueue } from "../lib/rabbitmq.js";
 
+const channelPromise = connectQueue();
 const JUDGE0_API_URL = "https://judge0-ce.p.rapidapi.com/submissions";
 const JUDGE0_API_KEY = "422d028478msh54f0f8734fdc900p1bfc78jsne9c10dabe328";
 
@@ -52,7 +53,10 @@ export const submitCode = async (req, res) => {
         });
 
         // Add to Redis queue
-        await client.lPush('submissions', submission._id.toString());
+        // await client.lPush('submissions', submission._id.toString());
+
+        const channel = await channelPromise;
+        channel.sendToQueue("submissions", Buffer.from(JSON.stringify({ submissionId: submission._id })));
 
         res.status(202).json(submission);
     } catch (err) {

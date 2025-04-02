@@ -29,3 +29,16 @@ export const insertProblem = async (req, res) => {
         res.status(500).json({message : "error while inserting" ,error: err.message });
     }
 }
+
+export const deleteProblem = async (req, res) => {
+    try {
+        const problem = await Problems.findById(req.params.id);
+        if(!problem){
+            return res.status(404).json({ message: "Problem not found" });
+        }
+        await Problems.findByIdAndDelete(req.params.id);
+        res.json({message : "Problem deleted successfully"});   
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+}
