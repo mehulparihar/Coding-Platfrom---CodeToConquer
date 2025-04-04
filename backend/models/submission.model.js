@@ -27,6 +27,12 @@ const submissionSchema = new mongoose.Schema({
     executionTime: {
         type: Number
     },
+    results: [{
+        input: String,
+        expected: String,
+        actual: String,
+        passed: Boolean
+    }],
     submitted_at: {
         type: Date,
         default: Date.now

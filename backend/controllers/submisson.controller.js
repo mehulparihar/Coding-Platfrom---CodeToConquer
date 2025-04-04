@@ -15,35 +15,7 @@ export const submitCode = async (req, res) => {
         const problem = await Problems.findById(problem_id);
         if (!problem) return res.status(404).json({ error: "Problem not found" });
 
-        // Submit each test case to Judge0
-        // let allPassed = true;
-        // let executionTime = 0;
-
-        // for (const testCase of problem.test_cases) {
-        //     const response = await axios.post(
-        //         `${JUDGE0_API_URL}?base64_encoded=false&wait=true`,
-        //         {
-        //             source_code: code,
-        //             language_id: getLanguageId(language),
-        //             stdin: testCase.input,
-        //             expected_output: testCase.expected_output,
-        //         },
-        //         {
-        //             headers: {
-        //                 "X-RapidAPI-Key": JUDGE0_API_KEY,
-        //                 'x-rapidapi-host': 'judge0-ce.p.rapidapi.com',
-        //             },
-        //         }
-        //     );
-
-        //     const { status, time } = response.data;
-        //     if (status.description !== "Accepted") {
-        //         allPassed = false;
-        //         break;
-        //     }
-        //     executionTime = Math.max(executionTime, time);
-        // }
-
+       
         // Save submission to DB
         const submission = await Submission.create({
             user : user_id,
@@ -51,10 +23,14 @@ export const submitCode = async (req, res) => {
             code,
             language,
         });
-
-        // Add to Redis queue
-        // await client.lPush('submissions', submission._id.toString());
-
+        
+        await Problems.findByIdAndUpdate(
+            problem_id,
+            {
+                $inc: { attemptCount: 1 }
+            },
+        );
+        
         const channel = await channelPromise;
         channel.sendToQueue("submissions", Buffer.from(JSON.stringify({ submissionId: submission._id })));
 
@@ -75,7 +51,7 @@ export const allSubmission = async (req, res) => {
 
 export const getSubmissionById = async (req, res) => {
     try {
-        const submission = await Submission.find({ user_id: req.params.user_id }).populate("problem_id");
+        const submission = await Submission.findById(req.params.submissionId);
         if (!submission) return res.status(404).json({ error: "Submission not found" });
         res.json(submission);
     } catch (err) {

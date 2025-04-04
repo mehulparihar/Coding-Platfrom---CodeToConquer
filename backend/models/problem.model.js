@@ -32,12 +32,28 @@ const problemSchema = new mongoose.Schema({
     constraints: {
         type: String
     },
+    tags: {
+        type: [String],
+        default: []
+    },
+    hints: {
+        type: [String],
+        default: []
+    },
     starterCodes: {
         python: String,
         cpp: String,
         java: String
     },
     testCases: [testcaseSchema],
+    attemptCount: { 
+        type: Number, 
+        default: 0 
+    },
+    solveCount: { 
+        type: Number, 
+        default: 0 
+    },
     created_at: { type: Date, default: Date.now },
 })
 

@@ -163,12 +163,20 @@ const processSubmission = async (submissionId) => {
     console.log("All Passed:", allPassed);
     await Submission.findByIdAndUpdate(submissionId, {
       status: allPassed ? "Accepted" : "Wrong Answer",
+      results : results,
     });
 
     if (allPassed) {
       await User.findByIdAndUpdate(submission.user._id, {
         $inc: { score: calculateScore(submission) },
+        $addToSet: { submissions : submission.problem.id }
       });
+      await Problems.findByIdAndUpdate(
+        submission.problem._id,
+        {
+            $inc: { solveCount: 1 }
+        },
+    );
     }
   } catch (error) {
     console.error(`Error processing ${submissionId}:`, error);
@@ -195,4 +203,4 @@ const startJudgeWorker = async () => {
   }
 };
 
-export { startJudgeWorker };
+export { startJudgeWorker,runCodeInContainer };

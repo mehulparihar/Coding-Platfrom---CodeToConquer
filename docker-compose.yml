@@ -10,13 +10,18 @@ services:
     environment:
       - MONGODB_URI=mongodb://root:example@mongodb:27017/codetoconquer?authSource=admin
       - REDIS_URL=redis://localhost:6379
+      - RABBITMQ_URL=amqp://rabbitmq
       - DOCKER_SOCKET=/var/run/docker.sock
     volumes:
       - code_submissions:/app/backend/submissions  # Adjusted to backend path
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   mongodb:
     image: mongo:5.0
@@ -41,7 +46,30 @@ services:
       timeout: 3s
       retries: 3
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbit_data:/var/lib/rabbitmq
+  
+
+  # judge-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: backend/Dockerfile
+  #   environment:
+  #     - RABBITMQ_URL=amqp://rabbitmq
+  #     - CONCURRENCY=4  # Parallel workers per instance
+  #   deploy:
+  #     replicas: 3      # Scale judge workers
+  #   depends_on:
+  #     - rabbitmq
+  #   command: ["node", "backend/services/judge.service.js"]
+
 volumes:
   mongo_data:
   redis_data:
   code_submissions:
+  rabbit_data:

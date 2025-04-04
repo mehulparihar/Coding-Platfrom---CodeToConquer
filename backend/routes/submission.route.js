@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.post("/", submitCode);
 router.get("/", allSubmission);
-router.get("/user/:user_id", protectRoute, getSubmissionById);
+router.get("/user/:submissionId", protectRoute, getSubmissionById);
 
 export default router;
