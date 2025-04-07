@@ -10,6 +10,9 @@ import { startJudgeWorker } from "./services/judge.service.js";
 import http from 'http';
 import { initLiveBattle } from "./services/liveBattle.service.js";
 import contestRoutes from "./routes/contest.route.js"
+import cron from "./utils/cron.utils.js"
+import battleRoutes from "./routes/battle.route.js"
+import leaderboardRoutes from "./routes/leaderboard.route.js"
 
 dotenv.config();
 const app = express();
@@ -25,7 +28,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/problems", problemsRoutes);
 app.use("/api/submissions", submissionRoutes);
 app.use("/api/contest", contestRoutes);
-
+app.use("/api/battles", battleRoutes);
+app.use("/api/leaderboard", leaderboardRoutes);
 
 const startServer = async () => {
     await connectDB();

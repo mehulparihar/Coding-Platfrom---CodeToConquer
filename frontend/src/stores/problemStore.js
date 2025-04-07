@@ -6,6 +6,7 @@ import axios from "../lib/axios";
 export const problemStore = create((set, get) => ({
     problems: [],
     problem: null,
+    dailychallenge : null,
     filters: {
         searchQuery: '',
         tags: [],
@@ -58,16 +59,26 @@ export const problemStore = create((set, get) => ({
         filters: { ...state.filters, status }
     })),
 
-    createProblem: async (problemData) => {
+    createProblem: async (problemForm) => {
         try {
-            const res = await axios.post("/problems", productData);
+            const res = await axios.post("/problems", problemForm);
             set((prevState) => ({
-                products: [...prevState.products, res.data],
+                problems: [...prevState.problems, res.data],
             }));
         } catch (error) {
             toast.error(error.response.data.error);
         }
     },
+    getdailyChallenge : async () => {
+        try {
+            const response = await axios.post("/problems/daily");
+            console.log(response);
+            set({ dailychallenge: response.data });
+        } catch (error) {
+            toast.error(error.message.data.error || "Failed to fetch daily challenge");
+        }
+    },
+    
     fetchProblemById: async (id) => {
         const state = get();
         const existingProblem = state.problems.find((p) => p._id == id);

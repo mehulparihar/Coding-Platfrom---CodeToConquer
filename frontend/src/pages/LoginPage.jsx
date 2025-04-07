@@ -12,7 +12,7 @@ const LoginPage = () => {
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
     const { darkMode } = useTheme();
-    const { login } = userStore();
+    const { login, user } = userStore();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -20,11 +20,13 @@ const LoginPage = () => {
 
         // Simulating API call delay
         setTimeout(() => {
-            localStorage.setItem('token', 'mockToken123');
+            // localStorage.setItem('token', 'mockToken123');
             try {
                 login(formData);
-                toast.success('Login successful!');
-                navigate('/');
+                if(user) {
+                    toast.success('Login successful!');
+                    navigate('/');
+                }
                 setIsLoading(false);
             } catch (error) {
                 toast.error('Invalid credentials');

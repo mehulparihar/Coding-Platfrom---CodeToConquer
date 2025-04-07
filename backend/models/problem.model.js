@@ -36,10 +36,10 @@ const problemSchema = new mongoose.Schema({
         type: [String],
         default: []
     },
-    hints: {
+    hints: [{
         type: [String],
         default: []
-    },
+    }],
     starterCodes: {
         python: String,
         cpp: String,

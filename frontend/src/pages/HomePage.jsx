@@ -2,10 +2,142 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { CodeBracketIcon, CpuChipIcon, GlobeAltIcon, RocketLaunchIcon, TrophyIcon } from '@heroicons/react/24/outline';
 import { useTheme } from '../stores/useTheme';
+import { problemStore } from '../stores/problemStore';
+import { useEffect, useState } from 'react';
+import { contestStore } from '../stores/contestStore'
+import { userStore } from '../stores/userStore';
+import toast from 'react-hot-toast';
+import { battleStore } from '../stores/battleStore';
+import axios from '../lib/axios';
+
+
+const CountdownTimer = ({ targetDate }) => {
+  // Function to calculate the time left until targetDate
+  const calculateTimeLeft = () => {
+    const difference = +new Date(targetDate) - +new Date();
+    let timeLeft = {};
+
+    if (difference > 0) {
+      timeLeft = {
+        // days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hrs: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        min: Math.floor((difference / (1000 * 60)) % 60),
+        sec: Math.floor((difference / 1000) % 60)
+      };
+    }
+    return timeLeft;
+  };
+
+  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
+
+  useEffect(() => {
+    // Update timer every second
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    // Cleanup the interval on component unmount
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  // Build timer display components
+  const timerComponents = Object.keys(timeLeft).map(interval => (
+    <span className="text-4xl font-bold text-blue-600 dark:text-blue-400" key={interval}>
+      {timeLeft[interval]}{interval}{interval !== "sec" && " : "}
+    </span>
+  ));
+
+  return (
+    <div>
+      {timerComponents.length ? timerComponents : <span>Time's up!</span>}
+    </div>
+  );
+};
+
+const CountdownTimerContest = ({ targetDate }) => {
+  // Function to calculate the time left until targetDate
+  const calculateTimeLeft = () => {
+    const difference = +new Date(targetDate) - +new Date();
+    let timeLeft = {};
+
+    if (difference > 0) {
+      timeLeft = {
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hrs: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        min: Math.floor((difference / (1000 * 60)) % 60),
+        sec: Math.floor((difference / 1000) % 60)
+      };
+    }
+    return timeLeft;
+  };
+
+  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
+
+  useEffect(() => {
+    // Update timer every second
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    // Cleanup the interval on component unmount
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  // Build timer display components
+
+  const timerComponents = Object.keys(timeLeft).map(interval => (
+    <span className="text-sm text-gray-600 dark:text-gray-300" key={interval}>
+      {interval === "days" && "Starts in "}{timeLeft[interval]}{interval}{interval !== "sec" && " : "}
+    </span>
+  ));
+
+  return (
+    <div>
+      {timerComponents.length ? timerComponents : <span>Time's up!</span>}
+    </div>
+  );
+};
 
 const HomePage = () => {
   const { darkMode } = useTheme();
+  const { getdailyChallenge, dailychallenge } = problemStore();
+  const { getContest, contests, register } = contestStore();
+  const { user } = userStore();
+  const { getBattles, battles } = battleStore();
 
+  const handleRegister = async (id) => {
+    // e.preventDefault();
+    if (!user) {
+      return toast.error("Login to register for contest");
+    }
+    register(id);
+  }
+  const [leaderboard, setLeaderboard] = useState([]);
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const res = await axios.get('/leaderboard');
+        // Assuming your backend returns { daily, weekly, allTime, contests, streaks }
+        // Here, we're using the allTime leaderboard for the preview.
+        setLeaderboard(res.data.allTime);
+      } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+      }
+    };
+
+    fetchLeaderboard();
+  }, []);
+
+
+  useEffect(() => {
+    getBattles();
+  }, [getBattles]);
+
+  useEffect(() => {
+    getdailyChallenge();
+    getContest();
+  }, [getdailyChallenge, getContest]);
   const learningTracks = [
     {
       title: "Data Structures",
@@ -38,7 +170,7 @@ const HomePage = () => {
       {/* Hero Section */}
       <section className="pt-20 pb-24 px-4">
         <div className="max-w-6xl mx-auto text-center">
-          <motion.h1 
+          <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-5xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
@@ -61,7 +193,7 @@ const HomePage = () => {
           <h2 className="text-3xl font-bold mb-12 text-center dark:text-white">Explore Learning Tracks</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {learningTracks.map((track, index) => (
-              <motion.div 
+              <motion.div
                 key={index}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -96,20 +228,21 @@ const HomePage = () => {
               <div className="md:w-2/3 mb-6 md:mb-0">
                 <h2 className="text-2xl font-bold mb-4 dark:text-white">Daily Coding Challenge</h2>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  Today's featured problem: Implement a trie data structure with insert, search, and startsWith methods
+                  Today's featured problem: {dailychallenge?.problem?.title}
                 </p>
                 <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Difficulty: Medium</span>
-                  <span className="text-sm text-blue-600 dark:text-blue-400">87% Completion Rate</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Difficulty: {dailychallenge?.problem?.difficulty}</span>
+                  <span className="text-sm text-blue-600 dark:text-blue-400">{Math.round((dailychallenge?.problem?.solveCount / dailychallenge?.problem?.attemptCount * 100))}% Completion Rate</span>
                 </div>
               </div>
               <div className="md:w-1/3 text-center">
                 <div className="mb-4">
-                  <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">24:00:00</div>
+                  {/* <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">24:00:00</div> */}
+                  <CountdownTimer className="text-4xl font-bold text-blue-600 dark:text-blue-400" targetDate={new Date(new Date(dailychallenge?.date).getTime() + 24 * 60 * 60 * 1000)} />
                   <span className="text-gray-500 dark:text-gray-400">Time Remaining</span>
                 </div>
-                <Link 
-                  to="/daily-challenge" 
+                <Link
+                  to={`/problems/${dailychallenge?.problem._id}`}
                   className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   Attempt Challenge
@@ -125,15 +258,17 @@ const HomePage = () => {
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold mb-8 text-center dark:text-white">Live Coding Battles</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Ongoing Battles */}
             <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-8 rounded-2xl">
               <h3 className="text-xl font-bold mb-4">Ongoing Battles</h3>
-              <div className="space-y-4">
-                {[1, 2, 3].map((battle) => (
-                  <div key={battle} className="bg-white/10 p-4 rounded-lg">
+              <div className="max-h-64 overflow-y-auto space-y-4 custom-scrollbar">
+                {battles?.map((battle) => (
+                  <div key={battle.id} className="bg-white/10 p-4 rounded-lg">
                     <div className="flex justify-between items-center">
                       <div>
-                        <h4 className="font-semibold">Binary Search Showdown</h4>
-                        <p className="text-sm opacity-75">4 participants</p>
+                        <h4 className="font-semibold">{battle.title}</h4>
+                        <p className="text-sm opacity-75">{battle.participants.length} participants</p>
                       </div>
                       <button className="px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition">
                         Join Battle
@@ -144,61 +279,89 @@ const HomePage = () => {
               </div>
             </div>
 
+            {/* Upcoming Contests */}
             <div className="bg-gray-100 dark:bg-gray-700 p-8 rounded-2xl">
               <h3 className="text-xl font-bold mb-4 dark:text-white">Upcoming Contests</h3>
-              <div className="space-y-4">
-                {[1, 2].map((contest) => (
-                  <div key={contest} className="bg-white dark:bg-gray-600 p-4 rounded-lg shadow">
+              <div className="max-h-64 overflow-y-auto space-y-4 custom-scrollbar">
+                {contests?.map((contest) => (
+                  <div key={contest._id} className="bg-white dark:bg-gray-600 p-4 rounded-lg shadow">
                     <div className="flex justify-between items-center">
                       <div>
-                        <h4 className="font-semibold dark:text-white">Weekly Coding Challenge</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">Starts in 2:15:30</p>
+                      0        <h4 className="font-semibold dark:text-white">{contest.title}</h4>
+                        <CountdownTimerContest
+                          className="text-4xl font-bold text-blue-600 dark:text-blue-400"
+                          targetDate={new Date(new Date(contest.startTime).getTime() + 24 * 60 * 60 * 1000)}
+                        />
                       </div>
-                      <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                        Register
-                      </button>
+                      {contest.participants.some(p => p.user === user?._id) ? (
+                        <button className="px-4 py-2 bg-gray-500 text-white rounded-lg cursor-not-allowed">
+                          Registered
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRegister(contest._id)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        >
+                          Register
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+
           </div>
         </div>
       </section>
 
+
+
       {/* Leaderboard Preview */}
       <section className="py-16 px-4 bg-gray-50 dark:bg-gray-800">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold mb-8 text-center dark:text-white">Top Coders</h2>
-          <div className="bg-white dark:bg-gray-700 rounded-2xl shadow-lg overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-600">
+      <div className="max-w-6xl mx-auto">
+        <h2 className="text-3xl font-bold mb-8 text-center dark:text-white">Top Coders</h2>
+        <div className="bg-white dark:bg-gray-700 rounded-2xl shadow-lg overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-600">
+              <tr>
+                <th className="px-6 py-4 text-left">Rank</th>
+                <th className="px-6 py-4 text-left">User</th>
+                <th className="px-6 py-4 text-right">Score</th>
+                <th className="px-6 py-4 text-right">Solved</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.length > 0 ? (
+                leaderboard.map((user, index) => (
+                  <motion.tr
+                    key={user._id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="border-t border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <td className="px-6 py-4 font-medium">#{index + 1}</td>
+                    <td className="px-6 py-4">{user.username}</td>
+                    <td className="px-6 py-4 text-right">{user.score.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-right">{user.problemsSolved}</td>
+                  </motion.tr>
+                ))
+              ) : (
                 <tr>
-                  <th className="px-6 py-4 text-left">Rank</th>
-                  <th className="px-6 py-4 text-left">User</th>
-                  <th className="px-6 py-4 text-right">Score</th>
-                  <th className="px-6 py-4 text-right">Solved</th>
+                  <td colSpan="4" className="text-center py-4">No data available</td>
                 </tr>
-              </thead>
-              <tbody>
-                {[1, 2, 3, 4, 5].map((rank) => (
-                  <tr key={rank} className="border-t border-gray-200 dark:border-gray-600">
-                    <td className="px-6 py-4 font-medium">#{rank}</td>
-                    <td className="px-6 py-4">User{rank}</td>
-                    <td className="px-6 py-4 text-right">{(1500 - (rank*100)).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right">{120 - (rank*10)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="p-6 text-center">
-              <Link to="/leaderboard" className="text-blue-600 dark:text-blue-400 hover:underline">
-                View Full Leaderboard →
-              </Link>
-            </div>
+              )}
+            </tbody>
+          </table>
+          <div className="p-6 text-center">
+            <Link to="/leaderboard" className="text-blue-600 dark:text-blue-400 hover:underline">
+              View Full Leaderboard →
+            </Link>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
     </div>
   );
 };

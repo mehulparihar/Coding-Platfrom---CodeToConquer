@@ -6,7 +6,11 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      backgroundImage: {
+        'leaderboard-gradient': 'linear-gradient(to right, #f59e0b, #ea580c)',
+      }
+    },
   },
   plugins: [],
 }

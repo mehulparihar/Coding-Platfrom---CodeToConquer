@@ -5,6 +5,7 @@ import Problems from "../models/problem.model.js";
 import User from "../models/user.model.js";
 import { PassThrough } from "stream";
 import amqplib from "amqplib";
+import DailyChallenge from "../models/DailyChallenge.model.js";
 
 const docker = new Docker();
 const RABBITMQ_URL = "amqp://localhost";
@@ -167,7 +168,30 @@ const processSubmission = async (submissionId) => {
     });
 
     if (allPassed) {
-      await User.findByIdAndUpdate(submission.user._id, {
+
+      const currentDate = new Date().setHours(0, 0, 0, 0);
+     const dailyChallenge = await DailyChallenge.findOne({ date: currentDate });
+
+    const progress = await User.findOne( submission.user._id);
+    const isPreviousDayCompletion = progress?.lastCompleted
+      ? progress.lastCompleted.getDate() === (new Date().getDate() - 1)
+      : false;
+
+    const newStreak = (progress?.currentStreak || 0) + 1;
+    
+    await User.updateOne(
+      { _id : submission.user._id },
+      {
+        $set: {
+          currentStreak: newStreak,
+          lastCompleted: new Date(),
+          isCompletedToday: true
+        }
+      },
+      { upsert: true }
+    );
+    
+     await User.findByIdAndUpdate(submission.user._id, {
         $inc: { score: calculateScore(submission) },
         $addToSet: { submissions : submission.problem.id }
       });

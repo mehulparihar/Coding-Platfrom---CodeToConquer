@@ -19,3 +19,44 @@
 .drop-shadow-glow {
     animation: glow 1.5s ease-in-out infinite;
 }
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    /* Light transparent track */
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    /* Subtle white thumb */
+    border-radius: 10px;
+    transition: all 0.3s ease-in-out;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+    /* Slightly darker on hover */
+}
+
+/* In your global CSS */
+.whitespace-pre-wrap {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  
+  .prose pre {
+    background: #f3f4f6;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+  
+  .prose code {
+    background: #f3f4f6;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+  }

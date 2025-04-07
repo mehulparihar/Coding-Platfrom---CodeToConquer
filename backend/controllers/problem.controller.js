@@ -1,3 +1,4 @@
+import DailyChallenge from "../models/DailyChallenge.model.js";
 import Problems from "../models/problem.model.js";
 
 export const getProblemById = async (req, res) => {
@@ -10,7 +11,22 @@ export const getProblemById = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
-
+export const getdailyChallenge = async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const challenge = await DailyChallenge.findOne({ date: today })
+        .populate('problem');
+        const response = {
+            ...challenge.toObject(),
+            date: challenge.date.toISOString()
+          };
+        res.json(challenge);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
 export const getAllProblem = async (req, res) => {
     try {
         const problems = await Problems.find();
