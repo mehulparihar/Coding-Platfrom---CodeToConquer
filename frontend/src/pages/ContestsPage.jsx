@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link} from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiClock, FiCalendar, FiUsers, FiCode } from 'react-icons/fi';
 import { contestStore } from '../stores/contestStore';
 import { userStore } from '../stores/userStore';
 import toast from 'react-hot-toast';
+import { useNavigate } from "react-router-dom";
 
 
 const ContestsPage = () => {
-
     const [filter, setFilter] = useState('all');
     const { getContest, contests } = contestStore();
+    
     useEffect(() => {
         getContest();
     }, [getContest]);
@@ -18,13 +19,21 @@ const ContestsPage = () => {
     const categorizeContests = () => {
         const now = new Date();
         return contests.reduce((acc, contest) => {
+            const startTime = new Date(contest.startTime);
             const endTime = new Date(contest.endTime);
-            endTime < now ? acc.past.push(contest) : acc.upcoming.push(contest);
+            
+            if (endTime < now) {
+                acc.past.push(contest);
+            } else if (startTime > now) {
+                acc.upcoming.push(contest);
+            } else {
+                acc.active.push(contest);
+            }
             return acc;
-        }, { upcoming: [], past: [] });
+        }, { upcoming: [], active: [], past: [] });
     };
 
-    const { upcoming, past } = categorizeContests();
+    const { upcoming, active, past } = categorizeContests();
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 p-8">
@@ -48,7 +57,7 @@ const ContestsPage = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                 >
-                    {['all', 'upcoming', 'past'].map((f) => (
+                    {['all', 'active', 'upcoming', 'past'].map((f) => (
                         <motion.button
                             key={f}
                             whileHover={{ scale: 1.05 }}
@@ -66,6 +75,10 @@ const ContestsPage = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {(filter === 'all' || filter === 'upcoming') && upcoming.map(contest => (
+                        <ContestCard key={contest._id} contest={contest} />
+                    ))}
+
+                    {(filter === 'all' || filter === 'active') && active.map(contest => (
                         <ContestCard key={contest._id} contest={contest} />
                     ))}
 
@@ -99,7 +112,6 @@ const ContestCard = ({ contest }) => {
     const { register } = contestStore();
     const {user} = userStore();
     const handleRegister = async (id) => {
-        // e.preventDefault();
         if (!user) {
           return toast.error("Login to register for contest");
         }
@@ -140,13 +152,17 @@ const ContestCard = ({ contest }) => {
         const seconds = Math.floor((ms % (1000 * 60)) / 1000);
         return { days, hours, minutes, seconds };
     };
-
+    const navigate = useNavigate();
+    const handleCard = async () => {
+        navigate(`${contest._id}`)
+    }
     return (
         <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             whileHover={{ y: -5 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl hover:shadow-2xl transition-all p-6 relative overflow-hidden"
+            onClick={() => {handleCard()}}
+             className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl hover:shadow-2xl transition-all p-6 relative overflow-hidden cursor-pointer"
         >
             {/* Glow effect */}
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-20 pointer-events-none" />
@@ -259,7 +275,7 @@ const ContestCard = ({ contest }) => {
                     // </button>
                     <Link
                     // to={`/contests/${contest._id}`}
-                    onClick={() => handleRegister(contest._id)}
+                    onClick={() => {handleRegister(contest._id)}}
                     className="w-full block text-center py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
                 >
                     {new Date(contest.endTime) < new Date() ? 'View Results' : 'Join Contest →'}

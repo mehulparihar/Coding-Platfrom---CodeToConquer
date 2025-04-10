@@ -5,6 +5,7 @@ import { contestStore } from '../stores/contestStore';
 import { FiX, FiEdit, FiTrash, FiPlus, FiCode, FiClock } from 'react-icons/fi';
 import Modal from 'react-modal';
 import { MdComputer } from 'react-icons/md';
+import toast from 'react-hot-toast';
 
 // Modal.setAppElement('#root');
 
@@ -82,20 +83,21 @@ const AdminPage = () => {
         ...contestForm,
         startTime: new Date(contestForm.startTime),
         endTime: new Date(contestForm.endTime)
-      };
-
-      if (selectedContest) {
-        await updateContest(selectedContest._id, contestData);
-      } else {
-        await createContest(contestData);
-      }
+      }; 
+      await createContest(contestData);
       setIsContestModalOpen(false);
       resetForms();
     } catch (error) {
       console.error('Error saving contest:', error);
     }
   };
-
+  const handleDeleteProblem = async (problemId) => {
+    try {
+        await deleteProblem(problemId);
+    } catch (error) {
+        toast.error("Error in deleting problem");
+    }
+  }
   const resetForms = () => {
     setProblemForm({
       title: '',
@@ -320,13 +322,22 @@ const AdminPage = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Description</label>
-            <textarea
-              required
-              className="w-full p-2 border rounded h-32"
-              value={problemForm.description}
-              onChange={e => setProblemForm({ ...problemForm, description: e.target.value })}
-            />
+              <label className="block text-sm font-medium mb-2">Description</label>
+              <textarea
+                required
+                className="w-full p-2 border rounded h-32"
+                value={problemForm.description}
+                onChange={e => setProblemForm({ ...problemForm, description: e.target.value })}
+              />
+          </div>
+          <div>
+              <label className="block text-sm font-medium mb-2">Constraints</label>
+              <textarea
+                required
+                className="w-full p-2 border rounded"
+                value={problemForm.constraints}
+                onChange={e => setProblemForm({ ...problemForm, constraints: e.target.value })}
+              />
           </div>
 
           {/* Tags and Hints */}

@@ -42,7 +42,7 @@ export const insertProblem = async (req, res) => {
         await problem.save();
         res.json(problem);
     } catch (error) {
-        res.status(500).json({message : "error while inserting" ,error: err.message });
+        res.status(500).json({message : "error while inserting" ,error: error.message });
     }
 }
 

@@ -211,7 +211,7 @@ const ProblemsPage = () => {
 
                     {/* Tags */}
                     <div className="col-span-3 flex flex-wrap gap-2">
-                      {problem.tags.map(tag => (
+                      {problem.tags.slice(0, 3).map(tag => (
                         <span
                           key={tag}
                           className="px-2.5 py-1 bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 rounded-full text-xs font-medium"
@@ -234,7 +234,7 @@ const ProblemsPage = () => {
                     <div className="col-span-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {Math.round((problem.solveCount / problem.attemptCount) * 100)}%
+                          {Math.round((problem.solveCount / problem.attemptCount) * 100) || 0}%
                         </span>
                         <div className="w-16 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
                           <div 

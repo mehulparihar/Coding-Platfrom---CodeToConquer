@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import MonacoEditor from "@monaco-editor/react";
-
 import { problemStore } from '../stores/problemStore';
 import { motion } from 'framer-motion';
 import { ChevronLeftIcon, CodeBracketIcon, LightBulbIcon, ChartBarIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
@@ -71,10 +70,10 @@ const defaultCodes = {
   };
 
 
-const ProblemPage = () => {
+const ContestProblemPage = () => {
 
 
-    const { id } = useParams();
+    const { contestId, problemId } = useParams();
     const { fetchProblemById, problem } = problemStore();
     const [activeTab, setActiveTab] = useState('description');
     const [language, setLanguage] = useState('python');
@@ -85,11 +84,11 @@ const ProblemPage = () => {
     const [submissionError, setSubmissionError] = useState(null);
     const {user} = userStore();
     useEffect(() => {
-        if (id) {
-            fetchProblemById(id)
+        if (problemId) {
+            fetchProblemById(problemId)
         }
         
-    }, [id, language, fetchProblemById]);
+    }, [problemId, language, fetchProblemById]);
     useEffect(() => {
         if (!codes[language]) {
             setCodes((prev) => ({ ...prev, [language]: defaultCodes[language] }));
@@ -121,9 +120,9 @@ const ProblemPage = () => {
             setSubmissionError(null);
             setSubmissionResult(null);
 
-            const response = await axios.post('/submissions', {
+            const response = await axios.post(`/contest/${contestId}/submit`, {
                 user_id: user._id, 
-                problem_id: id,
+                problem_id: problemId,
                 code: codes[language],
                 language
             });
@@ -142,7 +141,7 @@ const ProblemPage = () => {
             {/* Navigation Header */}
             <nav className="bg-white shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-                    <Link to="/problems" className="flex items-center text-gray-600 hover:text-blue-600">
+                    <Link to= {`/contests/${contestId}`} className="flex items-center text-gray-600 hover:text-blue-600">
                         <ChevronLeftIcon className="h-5 w-5 mr-1" />
                         Back to Problems
                     </Link>
@@ -173,18 +172,18 @@ const ProblemPage = () => {
                         <h1 className="text-3xl font-bold text-gray-900">{problem.title}</h1>
 
                         {/* Tags */}
-                        <div className="flex flex-wrap gap-2">
+                        {/* <div className="flex flex-wrap gap-2">
                             {problem.tags.map(tag => (
                                 <span key={tag} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
                                     {tag}
                                 </span>
                             ))}
-                        </div>
+                        </div> */}
 
                         {/* Tabs */}
                         <div className="border-b border-gray-200">
                             <nav className="flex space-x-8">
-                                {['description', 'testcases', 'hints'].map((tab) => (
+                                {['description', 'testcases'].map((tab) => (
                                     <button
                                         key={tab}
                                         onClick={() => setActiveTab(tab)}
@@ -324,5 +323,5 @@ const ProblemPage = () => {
     );
 };
 
-export default ProblemPage;
+export default ContestProblemPage;
 

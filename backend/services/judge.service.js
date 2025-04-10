@@ -6,6 +6,7 @@ import User from "../models/user.model.js";
 import { PassThrough } from "stream";
 import amqplib from "amqplib";
 import DailyChallenge from "../models/DailyChallenge.model.js";
+import Contest from "../models/contest.model.js";
 
 const docker = new Docker();
 const RABBITMQ_URL = "amqp://localhost";
@@ -59,6 +60,50 @@ const calculateScore = (submission) => {
   };
   return difficultyScores[submission.problem.difficulty.toLowerCase()] || 10;
 };
+const updateContestLeaderboard = async (submission) => {
+  const contestId = submission.contest._id;
+  const userId = submission.user._id;
+  const problemId = submission.problem._id;
+  const score = calculateScore(submission);
+
+  // Find contest
+  const contest = await Contest.findById(contestId);
+
+  if (!contest) {
+    console.error("Contest not found.");
+    return;
+  }
+
+  let participant = contest.participants.find((p) => p.user.toString() === userId.toString());
+
+  if (!participant) {
+    // If user is not a participant, add them
+    participant = {
+      user: userId,
+      submissions: [],
+      score: 0,
+    };
+    contest.participants.push(participant);
+  }
+
+  // Check if the user has already submitted and passed this problem
+  const existingSubmission = participant.submissions.find((sub) => sub.problem.toString() === problemId.toString());
+
+  if (!existingSubmission || !existingSubmission.passed) {
+    // Update participant data
+    participant.submissions.push({
+      problem: problemId,
+      code: submission.code,
+      passed: true,
+      timestamp: new Date(),
+    });
+
+    participant.score += score; // Increase score
+  }
+
+  await contest.save(); // Save contest updates
+};
+
 
 const runCodeInContainer = async (submission, testCase) => {
   let container;
@@ -133,8 +178,8 @@ const runCodeInContainer = async (submission, testCase) => {
     };
   } finally {
     if (container) {
-      await container.stop().catch(() => {});
-      await container.remove().catch(() => {});
+      await container.stop().catch(() => { });
+      await container.remove().catch(() => { });
     }
   }
 };
@@ -143,8 +188,10 @@ const processSubmission = async (submissionId) => {
   try {
     const submission = await Submission.findById(submissionId)
       .populate("problem")
-      .populate("user");
+      .populate("user")
+      .populate("contest");
 
+    const isContestSubmission = !!submission.contest;
     const results = [];
 
     // Process each test case separately
@@ -162,45 +209,50 @@ const processSubmission = async (submissionId) => {
 
     const allPassed = results.every((r) => r.passed);
     console.log("All Passed:", allPassed);
+
     await Submission.findByIdAndUpdate(submissionId, {
       status: allPassed ? "Accepted" : "Wrong Answer",
-      results : results,
+      results: results,
     });
 
     if (allPassed) {
 
       const currentDate = new Date().setHours(0, 0, 0, 0);
-     const dailyChallenge = await DailyChallenge.findOne({ date: currentDate });
-
-    const progress = await User.findOne( submission.user._id);
-    const isPreviousDayCompletion = progress?.lastCompleted
-      ? progress.lastCompleted.getDate() === (new Date().getDate() - 1)
-      : false;
-
-    const newStreak = (progress?.currentStreak || 0) + 1;
-    
-    await User.updateOne(
-      { _id : submission.user._id },
+      const dailyChallenge = await DailyChallenge.findOne({ date: currentDate });
+      if(isContestSubmission)
       {
-        $set: {
-          currentStreak: newStreak,
-          lastCompleted: new Date(),
-          isCompletedToday: true
-        }
-      },
-      { upsert: true }
-    );
-    
-     await User.findByIdAndUpdate(submission.user._id, {
+        console.log("start");
+        await updateContestLeaderboard(submission);
+      }
+      const progress = await User.findOne(submission.user._id);
+      const isPreviousDayCompletion = progress?.lastCompleted
+        ? progress.lastCompleted.getDate() === (new Date().getDate() - 1)
+        : false;
+
+      const newStreak = (progress?.currentStreak || 0) + 1;
+
+      await User.updateOne(
+        { _id: submission.user._id },
+        {
+          $set: {
+            currentStreak: newStreak,
+            lastCompleted: new Date(),
+            isCompletedToday: true
+          }
+        },
+        { upsert: true }
+      );
+
+      await User.findByIdAndUpdate(submission.user._id, {
         $inc: { score: calculateScore(submission) },
-        $addToSet: { submissions : submission.problem.id }
+        $addToSet: { submissions: submission.problem.id }
       });
       await Problems.findByIdAndUpdate(
         submission.problem._id,
         {
-            $inc: { solveCount: 1 }
+          $inc: { solveCount: 1 }
         },
-    );
+      );
     }
   } catch (error) {
     console.error(`Error processing ${submissionId}:`, error);
@@ -227,4 +279,4 @@ const startJudgeWorker = async () => {
   }
 };
 
-export { startJudgeWorker,runCodeInContainer };
+export { startJudgeWorker, runCodeInContainer };

@@ -242,7 +242,7 @@ const HomePage = () => {
                   <span className="text-gray-500 dark:text-gray-400">Time Remaining</span>
                 </div>
                 <Link
-                  to={`/problems/${dailychallenge?.problem._id}`}
+                  to={`/problems/${dailychallenge?.problem?._id}`}
                   className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   Attempt Challenge
@@ -287,7 +287,7 @@ const HomePage = () => {
                   <div key={contest._id} className="bg-white dark:bg-gray-600 p-4 rounded-lg shadow">
                     <div className="flex justify-between items-center">
                       <div>
-                      0        <h4 className="font-semibold dark:text-white">{contest.title}</h4>
+                              <h4 className="font-semibold dark:text-white">{contest.title}</h4>
                         <CountdownTimerContest
                           className="text-4xl font-bold text-blue-600 dark:text-blue-400"
                           targetDate={new Date(new Date(contest.startTime).getTime() + 24 * 60 * 60 * 1000)}

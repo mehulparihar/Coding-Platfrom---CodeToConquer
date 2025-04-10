@@ -60,3 +60,16 @@
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
   }
+
+  .prose pre {
+    background: #f3f4f6;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+  
+  .prose code {
+    background: #f3f4f6;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+  }
