@@ -8,11 +8,12 @@ import problemsRoutes from "./routes/problems.route.js"
 import submissionRoutes from "./routes/submission.route.js"
 import { startJudgeWorker } from "./services/judge.service.js";
 import http from 'http';
-import { initLiveBattle } from "./services/liveBattle.service.js";
 import contestRoutes from "./routes/contest.route.js"
 import cron from "./utils/cron.utils.js"
 import battleRoutes from "./routes/battle.route.js"
 import leaderboardRoutes from "./routes/leaderboard.route.js"
+import socketHandler from "./services/liveBattle.service.js";
+import cors from "cors";
 
 dotenv.config();
 const app = express();
@@ -20,9 +21,12 @@ const httpServer = http.createServer(app);
 
 const PORT = process.env.PORT || 5000;
 
-app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
-
+app.use(cors({
+    origin: "http://localhost:5173", // your frontend origin
+    credentials: true
+}));
+app.use(express.json({ limit: "10mb" }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/problems", problemsRoutes);
@@ -35,8 +39,10 @@ const startServer = async () => {
     await connectDB();
     await connectRedis();
     startJudgeWorker();
-    initLiveBattle(httpServer);
-    app.listen(PORT, () => {
+    socketHandler(httpServer);
+    // initLiveBattle(httpServer);
+    
+    httpServer.listen(5000, () => {
         console.log("Server is running on port", PORT);
     });
 }

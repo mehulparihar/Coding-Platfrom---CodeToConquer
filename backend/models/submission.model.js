@@ -20,6 +20,7 @@ const submissionSchema = new mongoose.Schema({
         required: true
     },
     contest: { type: mongoose.Schema.Types.ObjectId, ref: "Contest", required: false },
+    battle: { type: mongoose.Schema.Types.ObjectId, ref: "Battle", default: null },
     status: {
         type: String,
         enum: ["Pending", "Accepted", "Wrong Answer", "Runtime Error", "Time Limit Exceeded"],

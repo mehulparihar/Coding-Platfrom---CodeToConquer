@@ -1,170 +1,242 @@
-// backend/services/liveBattle.js
-import { Server } from 'socket.io';
-import Submission from '../models/submission.model.js';
-import { runCodeInContainer } from './judge.service.js';
+import { Server } from "socket.io";
+import Submission from "../models/submission.model.js";
+import Problems from "../models/problem.model.js";
+import { connectQueue } from "../lib/rabbitmq.js";
+import Battle from "../models/battle.model.js";
+import User from "../models/user.model.js";
+// import { submitBattleCode } from "../controllers/battle.controller.js"; // if needed
 
-let ioInstance = null;
+const channelPromise = connectQueue();
 
-const initLiveBattle = (httpServer) => {
-  const io = new Server(httpServer, {
+const socketHandler = (server) => {
+  const io = new Server(server, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    }
+      origin: "http://localhost:5173",
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
   });
 
-  const activeBattles = new Map();
+  // Optional authentication middleware (if needed)
+  // io.use(async (socket, next) => {
+  //   try {
+  //     const token = socket.handshake.auth.token;
+  //     const user = await verifyToken(token); // Implement your token verification
+  //     socket.user = user;
+  //     next();
+  //   } catch (err) {
+  //     next(new Error("Authentication error"));
+  //   }
+  // });
 
-  io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
+  io.on("connection", (socket) => {
+    console.log("🔗 New user connected:", socket.id);
 
-    // Join a battle room
-    socket.on('joinBattle', async ({ battleId, userId }) => {
-      socket.join(battleId);
-      console.log(`User ${userId} joined battle ${battleId}`);
-
-      // Initialize battle state
-      if (!activeBattles.has(battleId)) {
-        activeBattles.set(battleId, {
-          participants: new Set(),
-          problem: null,
-          startTime: Date.now(),
-          submissions: new Map()
-        });
-      }
-      
-      const battle = activeBattles.get(battleId);
-      battle.participants.add(userId);
-
-      // Send initial battle state
-      io.to(battleId).emit('battleUpdate', {
-        participants: Array.from(battle.participants),
-        problem: battle.problem,
-        timeElapsed: Date.now() - battle.startTime
-      });
-    });
-
-    // Handle real-time code updates
-    socket.on('codeUpdate', ({ battleId, userId, code }) => {
-      socket.to(battleId).emit('codeUpdate', {
-        userId,
-        code: code.slice(0, 5000) // Limit code size for security
-      });
-    });
-
-    // Handle real-time submissions
-    socket.on('submitCode', async ({ battleId, userId, code, language }) => {
+    // 1. Join Battle Room
+    socket.on("joinBattle", async ({ battleId, userId }) => {
       try {
-        const battle = activeBattles.get(battleId);
-        if (!battle) return;
+        const battle = await Battle.findById(battleId);
+        if (!battle) {
+          socket.emit("errorMessage", "Battle not found!");
+          return;
+        }
+        socket.join(battleId);
+        console.log(`✅ ${userId} joined battle: ${battleId}`);
 
-        // Create temporary submission
-        const submission = {
-          code,
-          language,
-          problem: battle.problem,
-          submittedAt: Date.now()
-        };
+        io.to(battleId).emit("userJoined", { userId, message: "A new user has joined!" });
 
-        // Run against all test cases
-        const results = await Promise.all(
-          battle.problem.testCases.map(testCase => 
-            runCodeInContainer(submission, testCase)
-          )
+        // Send updated battle details (populate if needed)
+        const updatedBattle = await Battle.findById(battleId)
+          .populate("participants.user")
+          .populate("problem");
+        io.to(battleId).emit("battleUpdated", updatedBattle);
+      } catch (err) {
+        socket.emit("errorMessage", err.message);
+      }
+    });
+
+    // 2. Live Code Updates
+    socket.on("updateCode", async ({ battleId, userId, code }) => {
+      try {
+        const battle = await Battle.findById(battleId);
+        if (!battle) {
+          socket.emit("errorMessage", "Battle not found!");
+          return;
+        }
+        const participant = battle.participants.find(
+          (p) => p.user.toString() === userId.toString()
         );
 
-        const passed = results.every(r => r.passed);
-        
-        // Store submission results
-        battle.submissions.set(userId, {
-          code,
-          passed,
-          executionTime: results.reduce((sum, r) => sum + r.executionTime, 0),
-          timestamp: Date.now()
-        });
-
-        // Broadcast results
-        io.to(battleId).emit('submissionResult', {
-          userId,
-          passed,
-          executionTime: results[0].executionTime,
-          totalTestCases: battle.problem.testCases.length,
-          passedTestCases: results.filter(r => r.passed).length
-        });
-
-        // Check battle completion
-        if (Array.from(battle.submissions.values()).every(s => s.passed)) {
-          endBattle(battleId);
+        if (participant) {
+          participant.code = code;
+          await battle.save();
+          // Broadcast updated code to others in the battle (excluding sender)
+          socket.to(battleId).emit("codeUpdated", { userId, code });
         }
-
       } catch (error) {
-        console.error('Live battle submission error:', error);
-        socket.emit('submissionError', {
-          message: 'Failed to process submission',
-          error: error.message
-        });
+        socket.emit("errorMessage", error.message);
       }
     });
 
-    // Handle battle termination
-    socket.on('leaveBattle', (battleId) => {
-      socket.leave(battleId);
-      console.log(`User left battle ${battleId}`);
+    // 3. Submit Solution
+    socket.on("submitSolution", async ({ battleId, userId, code, language }) => {
+      try {
+        console.log("Submitting solution for battle:", battleId, "User:", userId);
+        const battle = await Battle.findById(battleId)
+          .populate("participants.user")
+          .populate("problem");
+        if (!battle) {
+          socket.emit("errorMessage", "Battle not found");
+          return;
+        }
+        if (battle.status !== "active") {
+          socket.emit("errorMessage", "Battle is not active");
+          return;
+        }
+        const participant = battle.participants.find(
+          (p) => p.user._id.toString() === userId.toString()
+        );
+        if (!participant) {
+          socket.emit("errorMessage", "User not found in this battle");
+          return;
+        }
+
+        // Create Submission
+        const submission = await Submission.create({
+          user: userId,
+          problem: battle.problem._id,
+          battle: battleId,
+          code,
+          language,
+        });
+
+        participant.code = code;
+        participant.language = language;
+        participant.submissionStatus = "running";
+        await battle.save();
+
+        // Send Submission to Judge Queue (via RabbitMQ)
+        const channel = await channelPromise;
+        channel.sendToQueue(
+          "submissions",
+          Buffer.from(JSON.stringify({ submissionId: submission._id }))
+        );
+        io.to(battleId).emit("submissionStatus", {
+          userId,
+          message: "User submitted a solution!",
+        });
+        console.log("📩 Submission sent to judge queue.");
+
+        // Determine if battle is complete based on at least one successful submission.
+        // Note: Adjust logic as needed (e.g. if you wait for one success or collect multiple submissions).
+        const solvedParticipants = battle.participants.filter((p) => p.solved);
+        if (solvedParticipants.length > 0) {
+          battle.status = "completed";
+          // Sort only those who solved by completionTime (fastest wins)
+          solvedParticipants.sort((a, b) => a.completionTime - b.completionTime);
+          battle.winner = solvedParticipants[0].user;
+          await battle.save();
+
+          // Re-fetch updated battle with populated winner
+          const updatedBattle = await Battle.findById(battleId)
+            .populate("participants.user")
+            .populate("problem")
+            .populate("winner");
+          io.to(battleId).emit("battleCompleted", updatedBattle);
+        }
+      } catch (error) {
+        console.error("🚨 Error submitting solution:", error);
+        socket.emit("submissionError", error.message);
+      }
     });
 
-    socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.id}`);
+    // 4. Chat Messaging
+    socket.on("chatMessage", async ({ battleId, userId, message }) => {
+      try {
+        const battle = await Battle.findById(battleId);
+        if (!battle) {
+          return socket.emit("errorMessage", "Battle not found");
+        }
+        const newMessage = {
+          user: userId,
+          text: message,
+          timestamp: new Date()
+        };
+
+        // If your Battle schema includes a messages array, push and save:
+        if (!battle.messages) battle.messages = [];
+        battle.messages.push(newMessage);
+        await battle.save();
+
+        // For emitting, we can try to use socket.user if available; otherwise, use a default.
+        
+        const senderName = socket.user && socket.user.username ? socket.user.username : `User-${userId}`;
+        const name = await User.findById(userId);
+        io.to(battleId).emit("newMessage", {
+          user: { _id: userId, username: name.username },
+          text: message,
+          timestamp: newMessage.timestamp
+        });
+      } catch (error) {
+        socket.emit("errorMessage", error.message);
+      }
+    });
+
+    // 5. Start Battle
+    socket.on("startBattle", async ({ battleId }) => {
+      try {
+        const battle = await Battle.findById(battleId);
+        if (!battle) {
+          return socket.emit("errorMessage", "Battle not found");
+        }
+        battle.status = "active";
+        battle.startTime = new Date();
+        // Set endTime based on duration (assume duration is in minutes)
+        if (battle.duration) {
+          battle.endTime = new Date(Date.now() + battle.duration * 60000);
+        }
+        await battle.save();
+        io.to(battleId).emit("battleStarted", { battleId });
+      } catch (error) {
+        socket.emit("errorMessage", error.message);
+      }
+    });
+
+    // 6. Start Timer: Emit time updates periodically.
+    socket.on("startTimer", async (battleId) => {
+      try {
+        const timerInterval = setInterval(async () => {
+          const battle = await Battle.findById(battleId);
+          if (!battle || !battle.endTime) return;
+          const now = new Date();
+          const timeLeft = Math.max(0, battle.endTime - now);
+          
+          io.to(battleId).emit("timeUpdate", { timeLeft, status: battle.status });
+          
+          if (timeLeft <= 0) {
+            battle.status = 'completed';
+            await battle.save();
+            // Re-fetch updated battle with winner populated if available
+            const updatedBattle = await Battle.findById(battleId)
+              .populate("participants.user")
+              .populate("problem")
+              .populate("winner");
+            io.to(battleId).emit("battleCompleted", updatedBattle);
+            clearInterval(timerInterval);
+          }
+        }, 1000);
+      } catch (error) {
+        socket.emit("errorMessage", error.message);
+      }
+    });
+
+    // 7. Disconnect
+    socket.on("disconnect", () => {
+      console.log("❌ User disconnected:", socket.id);
     });
   });
 
-  const endBattle = (battleId) => {
-    const battle = activeBattles.get(battleId);
-    if (!battle) return;
-
-    // Calculate final scores
-    const results = Array.from(battle.submissions.entries())
-      .map(([userId, submission]) => ({
-        userId,
-        ...submission
-      }))
-      .sort((a, b) => a.executionTime - b.executionTime);
-
-    // Save to database
-    results.forEach(async (result, index) => {
-      const submission = new Submission({
-        user: result.userId,
-        problem: battle.problem._id,
-        code: result.code,
-        language: result.language,
-        result: result.passed ? 'Accepted' : 'Wrong Answer',
-        executionTime: result.executionTime,
-        battleRank: index + 1
-      });
-      await submission.save();
-    });
-
-    // Broadcast final results
-    io.to(battleId).emit('battleEnd', {
-      rankings: results.map(r => ({
-        userId: r.userId,
-        executionTime: r.executionTime,
-        passed: r.passed
-      }))
-    });
-
-    activeBattles.delete(battleId);
-  };
-
-  ioInstance = io;
   return io;
 };
 
-// Helper to set battle problem
-const setBattleProblem = (battleId, problem) => {
-  if (activeBattles.has(battleId)) {
-    activeBattles.get(battleId).problem = problem;
-    ioInstance.to(battleId).emit('problemUpdate', problem);
-  }
-};
-
-export { initLiveBattle, setBattleProblem };
+export default socketHandler;

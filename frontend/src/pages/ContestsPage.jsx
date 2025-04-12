@@ -15,26 +15,26 @@ const ContestsPage = () => {
     useEffect(() => {
         getContest();
     }, [getContest]);
-
+    
     const categorizeContests = () => {
-        const now = new Date();
+        const now = new Date(); // Current time in local timezone
         return contests.reduce((acc, contest) => {
-            const startTime = new Date(contest.startTime);
+            const startTime = new Date(contest.startTime); 
             const endTime = new Date(contest.endTime);
-            
-            if (endTime < now) {
-                acc.past.push(contest);
-            } else if (startTime > now) {
-                acc.upcoming.push(contest);
+    
+            if (endTime.getTime() <= now.getTime()) {
+                acc.past.push(contest); // The contest has ended
+            } else if (startTime.getTime() > now.getTime()) {
+                acc.upcoming.push(contest); // The contest has not started yet
             } else {
-                acc.active.push(contest);
+                acc.active.push(contest); // The contest is currently running
             }
             return acc;
         }, { upcoming: [], active: [], past: [] });
     };
-
+    
     const { upcoming, active, past } = categorizeContests();
-
+    
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 p-8">
             <div className="max-w-7xl mx-auto">
@@ -111,6 +111,7 @@ const ContestCard = ({ contest }) => {
     const [progress, setProgress] = useState(0);
     const { register } = contestStore();
     const {user} = userStore();
+    const [contestStatus, setContestStatus] = useState('upcoming'); // Add status state
     const handleRegister = async (id) => {
         if (!user) {
           return toast.error("Login to register for contest");
@@ -124,26 +125,33 @@ const ContestCard = ({ contest }) => {
             const start = new Date(contest.startTime);
             const end = new Date(contest.endTime);
             const totalDuration = end - start;
-            const elapsed = now - start;
 
             if (now < start) {
+                // Contest hasn't started yet
                 const diff = start - now;
                 setTimeLeft(calculateTimeParts(diff));
                 setProgress(0);
+                setContestStatus('upcoming');
             } else if (now > end) {
+                // Contest has ended
                 setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
                 setProgress(100);
+                setContestStatus('ended');
             } else {
+                // Contest is active
                 const diff = end - now;
+                const elapsed = now - start;
                 setTimeLeft(calculateTimeParts(diff));
                 setProgress((elapsed / totalDuration) * 100);
+                setContestStatus('active');
             }
         };
 
         const interval = setInterval(updateTimer, 1000);
-        updateTimer();
+        updateTimer(); // Initial call
         return () => clearInterval(interval);
     }, [contest]);
+
 
     const calculateTimeParts = (ms) => {
         const days = Math.floor(ms / (1000 * 60 * 60 * 24));
@@ -168,13 +176,21 @@ const ContestCard = ({ contest }) => {
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-20 pointer-events-none" />
 
             {/* Status badge */}
-            <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-sm flex items-center gap-2 ${new Date(contest.endTime) < new Date()
-                ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                : 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300'
-                }`}>
-                <div className={`w-2 h-2 rounded-full ${new Date(contest.endTime) < new Date() ? 'bg-gray-400' : 'bg-green-500'
-                    }`} />
-                {new Date(contest.endTime) < new Date() ? 'Ended' : 'Active'}
+            <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-sm flex items-center gap-2 ${
+                contestStatus === 'ended' 
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                    : contestStatus === 'active'
+                    ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300'
+                    : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300'
+            }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                    contestStatus === 'ended' ? 'bg-gray-400' 
+                    : contestStatus === 'active' ? 'bg-green-500' 
+                    : 'bg-blue-500'
+                }`} />
+                {contestStatus === 'ended' ? 'Ended' 
+                 : contestStatus === 'active' ? 'Active' 
+                 : 'Upcoming'}
             </div>
 
             {/* Contest title */}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { contestStore } from '../stores/contestStore';
 import { problemStore } from '../stores/problemStore';
 import { FiClock, FiUsers, FiCode, FiAward } from 'react-icons/fi';
@@ -7,13 +7,15 @@ import { motion } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
 import { userStore } from '../stores/userStore';
 
+
+
 const ContestPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { contests, fetchContestById, contest } = contestStore();
     const { problems } = problemStore();
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-    const [contestStatus, setContestStatus] = useState('active');
+    const [contestStatus, setContestStatus] = useState('upcoming');
     const [progress, setProgress] = useState(0);
     const { user } = userStore();
     useEffect(() => {
@@ -39,11 +41,11 @@ const ContestPage = () => {
             const end = new Date(contest.endTime);
             const totalDuration = end - start;
             const elapsed = now - start;
-            if (now < contest.startTime) {
+            if (now < start) {
                 const diff = start - now;
                 setContestStatus('upcoming');
                 setTimeLeft(calculateTimeParts(diff));
-            } else if (now > contest.endTime) {
+            } else if (now > end) {
                 setContestStatus('ended');
             } else {
                 const diff = end - now;
@@ -133,7 +135,7 @@ const ContestPage = () => {
                     )}
                 </div>
 
-                {contestStatus === 'active' && (
+                {(contestStatus === 'active' || contestStatus === 'ended') && (
                     <div className="grid lg:grid-cols-3 gap-8">
                         {/* Problems List */}
                         <div className="lg:col-span-2">
@@ -153,56 +155,55 @@ const ContestPage = () => {
 
                                         return (
                                             <motion.div
-                                            key={problem._id}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            // Make the entire card clickable
-                                            onClick={() => navigate(`/contests/${contest._id}/${problem._id}`)}
-                                            className="border-b pb-4 last:border-0 hover:shadow-lg transition-all p-4 rounded-lg cursor-pointer"
-                                          >
-                                            <div className="flex items-center justify-between">
-                                              <div>
-                                                <div className="font-medium">
-                                                  {index + 1}. {problem?.title || 'Loading...'}
-                                                  {isSolved && (
-                                                    <span className="ml-2 text-sm text-green-700 font-semibold">(Solved)</span>
-                                                  )}
+                                                key={problem._id}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                // Make the entire card clickable
+                                                onClick={() => navigate(`/contests/${contest._id}/${problem._id}`)}
+                                                className="border-b pb-4 last:border-0 hover:shadow-lg transition-all p-4 rounded-lg cursor-pointer"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <div className="font-medium">
+                                                            {index + 1}. {problem?.title || 'Loading...'}
+                                                            {isSolved && (
+                                                                <span className="ml-2 text-sm text-green-700 font-semibold">(Solved)</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <span className={`text-sm px-2 py-1 rounded-full ${problem?.difficulty === 'Easy'
+                                                                    ? 'bg-green-100 text-green-800'
+                                                                    : problem?.difficulty === 'Medium'
+                                                                        ? 'bg-yellow-100 text-yellow-800'
+                                                                        : 'bg-red-100 text-red-800'
+                                                                }`}>
+                                                                {problem?.difficulty}
+                                                            </span>
+                                                            <span className="text-sm text-gray-500">{problem?.solveCount} solves</span>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        {isSolved ? (
+                                                            <button
+                                                                className="px-4 py-2 bg-green-600 text-white rounded-full text-sm font-medium cursor-not-allowed"
+                                                                disabled
+                                                            >
+                                                                Solved
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation(); // Prevent triggering card onClick
+                                                                    handleSolveClick(problem._id);
+                                                                }}
+                                                                className="px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 transition-all"
+                                                            >
+                                                                Solve
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 mt-2">
-                                                  <span className={`text-sm px-2 py-1 rounded-full ${
-                                                    problem?.difficulty === 'Easy'
-                                                      ? 'bg-green-100 text-green-800'
-                                                      : problem?.difficulty === 'Medium'
-                                                      ? 'bg-yellow-100 text-yellow-800'
-                                                      : 'bg-red-100 text-red-800'
-                                                  }`}>
-                                                    {problem?.difficulty}
-                                                  </span>
-                                                  <span className="text-sm text-gray-500">{problem?.solveCount} solves</span>
-                                                </div>
-                                              </div>
-                                              <div>
-                                                {isSolved ? (
-                                                  <button 
-                                                    className="px-4 py-2 bg-green-600 text-white rounded-full text-sm font-medium cursor-not-allowed" 
-                                                    disabled
-                                                  >
-                                                    Solved
-                                                  </button>
-                                                ) : (
-                                                  <button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation(); // Prevent triggering card onClick
-                                                      handleSolveClick(problem._id);
-                                                    }}
-                                                    className="px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 transition-all"
-                                                  >
-                                                    Solve
-                                                  </button>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </motion.div>
+                                            </motion.div>
                                         );
                                     })}
 
@@ -217,23 +218,43 @@ const ContestPage = () => {
                             </h2>
                             <div className="space-y-4">
                                 {contest.participants
-                                    .sort((a, b) => b.score - a.score || a.submissions[0]?.timestamp - b.submissions[0]?.timestamp)
-                                    .map((participant, index) => (
-                                        <div key={participant.user._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                            <div className="flex items-center gap-4">
-                                                <span className="font-medium">#{index + 1}</span>
-                                                <div>
-                                                    <div className="font-medium">{participant.user.username}</div>
-                                                    <div className="text-sm text-gray-500">
-                                                        Score: {participant.score}
+                                    .sort((a, b) =>
+                                        b.score - a.score ||
+                                        a.submissions.reduce((acc, sub) => Math.min(acc, new Date(sub.timestamp)), Infinity) -
+                                        b.submissions.reduce((acc, sub) => Math.min(acc, new Date(sub.timestamp)), Infinity)
+                                    )
+                                    .slice(0, 5)
+                                    .map((participant, index) => {
+                                        const lastSubmission = participant.submissions.length > 0
+                                            ? new Date(Math.max(...participant.submissions.map(s => new Date(s.timestamp))))
+                                            : null;
+
+                                        return (
+                                            <div key={participant.user._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                                <div className="flex items-center gap-4">
+                                                    <span className="font-medium">#{index + 1}</span>
+                                                    <div>
+                                                        <div className="font-medium">{participant.user.username}</div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {lastSubmission && `Finished at ${lastSubmission.toLocaleTimeString()}`}
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="font-medium">{participant.score}</span>
+                                                </div>
                                             </div>
-                                            <div className="text-sm text-gray-500">
-                                                {participant.submissions.length} solves
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
+
+                                {contest.participants.length > 1 && (
+                                    <Link
+                                        to={`/contests/${contest._id}/leaderboard`}
+                                        className="block text-center p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    >
+                                        View Full Leaderboard →
+                                    </Link>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -7,6 +7,7 @@ import { PassThrough } from "stream";
 import amqplib from "amqplib";
 import DailyChallenge from "../models/DailyChallenge.model.js";
 import Contest from "../models/contest.model.js";
+import Battle from "../models/battle.model.js";
 
 const docker = new Docker();
 const RABBITMQ_URL = "amqp://localhost";
@@ -60,6 +61,48 @@ const calculateScore = (submission) => {
   };
   return difficultyScores[submission.problem.difficulty.toLowerCase()] || 10;
 };
+
+const updateBattleStatus = async (submission) => {
+  const battle = await Battle.findById(submission.battle);
+  if (!battle) {
+    console.log("Battle not found.");
+    return;
+  }
+  if (battle.status === "completed") {
+    console.log("Battle already completed.");
+    return;
+  }
+  const userId = submission.user._id;
+  const participantIndex = battle.participants.findIndex(
+    (p) => p.user._id.toString() === userId.toString()
+  );
+
+  if (participantIndex === -1) {
+    console.log("User not found in battle participants.");
+    return;
+  }
+
+  const completionTime = new Date() - battle.startTime;
+  battle.participants[participantIndex].solved = true;
+  battle.participants[participantIndex].completionTime = completionTime;
+  battle.participants[participantIndex].submissionStatus = "passed";
+
+  // Check if there is at least one successful submission
+  const solvedParticipants = battle.participants.filter(p => p.solved);
+  if (solvedParticipants.length > 0) {
+    // Sort participants by completion time (fastest wins)
+    solvedParticipants.sort((a, b) => a.completionTime - b.completionTime);
+
+    // Update battle status when at least one person has solved
+    battle.status = "completed";
+    battle.winner = solvedParticipants[0]._id;
+    battle.score = 100; // Adjust scoring logic as needed
+  }
+
+  await battle.save();
+  console.log("Battle status updated successfully.");
+};
+
 const updateContestLeaderboard = async (submission) => {
   const contestId = submission.contest._id;
   const userId = submission.user._id;
@@ -189,9 +232,11 @@ const processSubmission = async (submissionId) => {
     const submission = await Submission.findById(submissionId)
       .populate("problem")
       .populate("user")
-      .populate("contest");
+      .populate("contest")
+      .populate("battle");
 
     const isContestSubmission = !!submission.contest;
+    const isBattleSubmission = !!submission.battle;
     const results = [];
 
     // Process each test case separately
@@ -219,11 +264,16 @@ const processSubmission = async (submissionId) => {
 
       const currentDate = new Date().setHours(0, 0, 0, 0);
       const dailyChallenge = await DailyChallenge.findOne({ date: currentDate });
-      if(isContestSubmission)
-      {
-        console.log("start");
+      if (isContestSubmission) {
+        console.log("Updating contest leaderboard...");
         await updateContestLeaderboard(submission);
       }
+
+      if (isBattleSubmission) {
+        console.log("Updating battle status...");
+        await updateBattleStatus(submission);
+      }
+
       const progress = await User.findOne(submission.user._id);
       const isPreviousDayCompletion = progress?.lastCompleted
         ? progress.lastCompleted.getDate() === (new Date().getDate() - 1)

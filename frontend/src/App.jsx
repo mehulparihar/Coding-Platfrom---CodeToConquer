@@ -14,6 +14,8 @@ import LeaderboardPage from "./pages/LeaderboardPage";
 import AdminPage from "./pages/AdminPage";
 import ContestPage from "./pages/ContestPage";
 import ContestProblemPage from "./pages/ContestProblemPage";
+import FullLeaderboard from "./pages/FullLeaderboard";
+import BattlePage from "./pages/BattlePage";
 
 function App() {
   const {user, checkAuth} = userStore();
@@ -32,8 +34,10 @@ function App() {
          <Route path = '/problems/:id' element = {<ProblemPage/>}/>
          <Route path = '/contests' element = {<ContestsPage/>}/>
          <Route path = '/contests/:id' element = {<ContestPage/>}/>
+         <Route path = '/contests/:contestId/leaderboard' element = {<FullLeaderboard/>}/>
          <Route path = '/contests/:contestId/:problemId' element = {<ContestProblemPage/>}/>
          <Route path = '/battles' element = {<BattlesPage/>}/>
+         <Route path = '/battles/:id' element = {<BattlePage/>}/>
          <Route path = '/leaderboard' element = {<LeaderboardPage/>}/>  
          <Route path = '/dashboard' element = {user?.role == "admin"? <AdminPage/>  :  <Navigate to = '/login'/>}/>
 

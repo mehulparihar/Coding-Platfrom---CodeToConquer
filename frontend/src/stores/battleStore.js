@@ -9,7 +9,11 @@ export const battleStore = create((set, get) => ({
     setBattle: (battle) => set({ battle }),
     setProblems: (battles) => set({ battles }),
 
-
+    updateBattleState: (updates) => {
+        set(state => ({
+          battle: { ...state.battle, ...updates }
+        }));
+      },
     getBattles : async () => {
         try {
             const response = await axios.get('/battles');
@@ -28,9 +32,20 @@ export const battleStore = create((set, get) => ({
             toast.error(error.message.data.error || "Failed to register contest");
         }
     },
-    createBattle : async (userId, problemId) => {
+    getBattleById : async (id) => {
         try {
-            const response = await axios.post(`/battles/create`, {problemId, userId});
+            const response = await axios.get(`/battles/${id}`);
+            console.log(response.data);
+            // if(!response) return toast.error("Failed to register contest");
+            set({battle : response.data});
+        } catch (error) {
+            toast.error(error.message.data.error || "Failed to get contest");
+        }
+    },
+    createBattle : async (data) => {
+        try {
+            console.log(data);
+            const response = await axios.post(`/battles/create`, data);
             if(!response) return toast.error("Failed to create battle");
             toast.success("succesfully create Battle");
         } catch (error) {
