@@ -7,7 +7,8 @@ const channelPromise = connectQueue();
 
 export const createBattle = async (req, res) => {
   try {
-    const { title, mode, privacy, difficulty, maxParticipants, duration, code } = req.body;
+    // console.log(req.body);
+    const { title, mode, privacy, difficulty, maxParticipants, duration, code, creator } = req.body;
     const randomProblem = await Problems.aggregate([
       { $match: { difficulty } }, // Filter problems by difficulty
       { $sample: { size: 1 } }    // Select one random problem
@@ -29,11 +30,13 @@ export const createBattle = async (req, res) => {
       duration,
       problem: problemId,
       status: "waiting",
-      battleCode: code
+      battleCode: code,
+      battleOwner : creator,
+
     });
 
     await battle.save();
-    res.status(201).json({ success: true, battle });
+    res.send(battle);
   } catch (error) {
     console.log(error.message);
     res.status(500).json({ error: error.message });
@@ -99,23 +102,33 @@ export const joinBattle = async (req, res) => {
 export const joinPrivateBattle = async (req, res) => {
   try {
     const { battleCode, userId } = req.body;
-
+    console.log(req.body);
     const battle = await Battle.findOne({ battleCode });
     if (!battle) return res.status(404).json({ success: false, message: "Invalid battle code" });
 
-    if (battle.participants.length >= battle.maxParticipants) {
+    if (battle.currentParticipants >= battle.maxParticipants) {
       return res.status(400).json({ success: false, message: "Battle is full" });
     }
 
-    battle.participants.push({ user: userId });
-    if (battle.participants.length === battle.maxParticipants) {
-      battle.status = "active";
-      battle.startTime = new Date();
+    if (!battle.participants.some(p => p.user.equals(userId))) {
+      battle.participants.push({
+        user: userId,
+        code: ''
+      });
+      battle.currentParticipants++;
+
+      if (battle.currentParticipants === battle.maxParticipants) {
+        battle.status = 'active';
+        battle.startTime = new Date();
+        battle.endTime = new Date(Date.now() + battle.duration * 60000);
+      }
+
+      await battle.save();
     }
 
-    await battle.save();
-    res.status(200).json({ success: true, battle });
+    res.send(battle);
   } catch (error) {
+    console.log("false");
     res.status(500).json({ success: false, error: error.message });
   }
 };

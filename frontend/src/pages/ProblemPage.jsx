@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { ChevronLeftIcon, CodeBracketIcon, LightBulbIcon, ChartBarIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import { userStore } from '../stores/userStore';
 import axios from '../lib/axios';
+import toast from 'react-hot-toast';
 
 const SubmissionResult = ({ result }) => {
     if (!result) return null;
@@ -116,6 +117,9 @@ const ProblemPage = () => {
    
       
     const handleSubmit = async () => {
+        if(!user){
+            return toast.error("Login to Submit Code");
+        }
         try {
             setIsSubmitting(true);
             setSubmissionError(null);

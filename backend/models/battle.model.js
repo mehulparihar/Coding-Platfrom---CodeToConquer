@@ -20,11 +20,11 @@ const battleSchema = new mongoose.Schema({
   teamB: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   battleType: { type: String, enum: ['1v1', 'Free-for-all', 'Team'], default: '1v1' }, // Type of battle
   privacy: { type: String, enum: ['public', 'private'], default: 'public' },
-
+  battleOwner : { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   startTime: { type: Date, default: null }, // Start time
   endTime: { type: Date, default: null }, // End time
   status: { type: String, enum: ['waiting', 'active', 'completed'], default: 'waiting' }, // Battle status
-  duration : {type: Date, default: null},
+  duration : {type: Number, default: 30},
   winner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, // Winner
   score: { type: Number, default: 0 }, // Score of the winner
   battleCode: { type: String, unique: true, sparse: true }, // Used for private battles

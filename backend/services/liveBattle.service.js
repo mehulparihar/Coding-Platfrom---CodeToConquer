@@ -4,7 +4,6 @@ import Problems from "../models/problem.model.js";
 import { connectQueue } from "../lib/rabbitmq.js";
 import Battle from "../models/battle.model.js";
 import User from "../models/user.model.js";
-// import { submitBattleCode } from "../controllers/battle.controller.js"; // if needed
 
 const channelPromise = connectQueue();
 
@@ -17,11 +16,11 @@ const socketHandler = (server) => {
     },
   });
 
-  // Optional authentication middleware (if needed)
+  // Optional authentication middleware can be added here if needed.
   // io.use(async (socket, next) => {
   //   try {
   //     const token = socket.handshake.auth.token;
-  //     const user = await verifyToken(token); // Implement your token verification
+  //     const user = await verifyToken(token); // Implement verifyToken()
   //     socket.user = user;
   //     next();
   //   } catch (err) {
@@ -41,20 +40,21 @@ const socketHandler = (server) => {
           return;
         }
         socket.join(battleId);
-        console.log(`✅ ${userId} joined battle: ${battleId}`);
+        console.log(`✅ User ${userId} joined battle: ${battleId}`);
 
         io.to(battleId).emit("userJoined", { userId, message: "A new user has joined!" });
 
         // Send updated battle details (populate if needed)
         const updatedBattle = await Battle.findById(battleId)
           .populate("participants.user")
-          .populate("problem");
+          .populate("problem")
+          .populate("winner");
         io.to(battleId).emit("battleUpdated", updatedBattle);
       } catch (err) {
         socket.emit("errorMessage", err.message);
       }
     });
-
+    
     // 2. Live Code Updates
     socket.on("updateCode", async ({ battleId, userId, code }) => {
       try {
@@ -66,7 +66,6 @@ const socketHandler = (server) => {
         const participant = battle.participants.find(
           (p) => p.user.toString() === userId.toString()
         );
-
         if (participant) {
           participant.code = code;
           await battle.save();
@@ -127,8 +126,7 @@ const socketHandler = (server) => {
         });
         console.log("📩 Submission sent to judge queue.");
 
-        // Determine if battle is complete based on at least one successful submission.
-        // Note: Adjust logic as needed (e.g. if you wait for one success or collect multiple submissions).
+        // Determine if at least one participant has solved the problem
         const solvedParticipants = battle.participants.filter((p) => p.solved);
         if (solvedParticipants.length > 0) {
           battle.status = "completed";
@@ -137,7 +135,6 @@ const socketHandler = (server) => {
           battle.winner = solvedParticipants[0].user;
           await battle.save();
 
-          // Re-fetch updated battle with populated winner
           const updatedBattle = await Battle.findById(battleId)
             .populate("participants.user")
             .populate("problem")
@@ -163,17 +160,13 @@ const socketHandler = (server) => {
           timestamp: new Date()
         };
 
-        // If your Battle schema includes a messages array, push and save:
         if (!battle.messages) battle.messages = [];
         battle.messages.push(newMessage);
         await battle.save();
 
-        // For emitting, we can try to use socket.user if available; otherwise, use a default.
-        
-        const senderName = socket.user && socket.user.username ? socket.user.username : `User-${userId}`;
-        const name = await User.findById(userId);
+        const sender = await User.findById(userId);
         io.to(battleId).emit("newMessage", {
-          user: { _id: userId, username: name.username },
+          user: { _id: userId, username: sender ? sender.username : `User-${userId}` },
           text: message,
           timestamp: newMessage.timestamp
         });
@@ -182,21 +175,31 @@ const socketHandler = (server) => {
       }
     });
 
-    // 5. Start Battle
-    socket.on("startBattle", async ({ battleId }) => {
+    // 5. Start Battle (Only the battle owner can start the battle)
+    socket.on("startBattle", async ({ battleId, userId }) => {
       try {
         const battle = await Battle.findById(battleId);
         if (!battle) {
           return socket.emit("errorMessage", "Battle not found");
         }
-        battle.status = "active";
-        battle.startTime = new Date();
-        // Set endTime based on duration (assume duration is in minutes)
-        if (battle.duration) {
-          battle.endTime = new Date(Date.now() + battle.duration * 60000);
+        // Check if the user is the battle owner.
+        if (battle.battleOwner && battle.battleOwner.toString() !== userId.toString()) {
+          return socket.emit("errorMessage", "Only the battle owner can start the battle");
         }
+        
+        battle.status = "active";
+        const startTime = new Date();
+        battle.startTime = startTime;
+        // Convert duration to a number (in minutes). Fallback to default (30) if missing.
+        let duration = Number(battle.duration);
+        if (isNaN(duration) || duration <= 0) {
+          duration = 30; // Default to 30 minutes if invalid.
+        }
+        battle.endTime = new Date(startTime.getTime() + duration * 60000);
         await battle.save();
         io.to(battleId).emit("battleStarted", { battleId });
+
+        
       } catch (error) {
         socket.emit("errorMessage", error.message);
       }
@@ -207,16 +210,23 @@ const socketHandler = (server) => {
       try {
         const timerInterval = setInterval(async () => {
           const battle = await Battle.findById(battleId);
-          if (!battle || !battle.endTime) return;
-          const now = new Date();
-          const timeLeft = Math.max(0, battle.endTime - now);
-          
-          io.to(battleId).emit("timeUpdate", { timeLeft, status: battle.status });
-          
-          if (timeLeft <= 0) {
+          if (!battle) return;
+          // If endTime is not defined, compute using startTime and duration.
+          let endTime;
+          if (battle.endTime) {
+            endTime = new Date(battle.endTime).getTime();
+          } else if (battle.startTime && battle.duration) {
+            const duration = Number(battle.duration) || 30;
+            endTime = new Date(battle.startTime.getTime() + duration * 60000).getTime();
+          } else {
+            return;
+          }
+          const now = Date.now();
+          const diff = Math.max(0, endTime - now);
+          io.to(battleId).emit("timeUpdate", { timeLeft: diff, status: battle.status });
+          if (diff <= 0) {
             battle.status = 'completed';
             await battle.save();
-            // Re-fetch updated battle with winner populated if available
             const updatedBattle = await Battle.findById(battleId)
               .populate("participants.user")
               .populate("problem")

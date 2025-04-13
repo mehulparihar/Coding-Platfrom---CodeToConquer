@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { userStore } from "../stores/userStore";
+import toast from "react-hot-toast";
 
 
 const CreateBattleModal = ({ isOpen, onClose, onCreate }) => {
@@ -21,9 +23,13 @@ const CreateBattleModal = ({ isOpen, onClose, onCreate }) => {
             maxParticipants: defaults[prev.mode]
         }));
     }, [battleData.mode]);
-
+    const {user} = userStore();
     const handleSubmit = (e) => {
         e.preventDefault();
+        if(!user)
+        {
+            return toast.error("Login to create battles");
+        }
         onCreate(battleData);
     };
 

@@ -264,7 +264,7 @@ const HomePage = () => {
               <h3 className="text-xl font-bold mb-4">Ongoing Battles</h3>
               <div className="max-h-64 overflow-y-auto space-y-4 custom-scrollbar">
                 {battles?.map((battle) => (
-                  <div key={battle.id} className="bg-white/10 p-4 rounded-lg">
+                  <div key={battle._id} className="bg-white/10 p-4 rounded-lg">
                     <div className="flex justify-between items-center">
                       <div>
                         <h4 className="font-semibold">{battle.title}</h4>

@@ -42,12 +42,28 @@ export const battleStore = create((set, get) => ({
             toast.error(error.message.data.error || "Failed to get contest");
         }
     },
+    joinPrivateBattle : async (battleCode, userId) => {
+        try {
+            console.log(battleCode, userId);
+            const response = await axios.post(`/battles/private/join`, {battleCode, userId});
+            console.log(response.data);
+            return response.data._id;
+            // set({battle : response.data});
+        } catch (error) {
+            toast.error(error.message.data.error || "Failed to get contest");
+        }
+    }
+    ,
     createBattle : async (data) => {
         try {
             console.log(data);
             const response = await axios.post(`/battles/create`, data);
+            const battleId = response.data._id;
+            const userId = data.creator;
+            const joined = await axios.post(`/battles/join/${battleId}`, {userId})
             if(!response) return toast.error("Failed to create battle");
             toast.success("succesfully create Battle");
+            return response.data;
         } catch (error) {
             toast.error(error.message.data.error || "Failed to create contest");
         }

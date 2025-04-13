@@ -16,6 +16,7 @@ import CreateBattleModal from '../components/CreateBattleModal';
 import JoinPrivateBattleModal from '../components/JoinPrivateBattleModal';
 import toast from 'react-hot-toast';
 
+
 const BattlesPage = () => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all');
@@ -48,6 +49,7 @@ const BattlesPage = () => {
       code: Math.random().toString(36).substr(2, 6).toUpperCase()
     });
 
+    console.log("joined", newBattle);
     if (newBattle) {
       navigate(`/battles/${newBattle._id}`);
       setShowCreateModal(false);
@@ -131,7 +133,7 @@ const BattlesPage = () => {
           </motion.div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredBattles.map(battle => (
+            {filteredBattles.filter(battle => battle.privacy !== "private").map(battle => (
               <BattleCard key={battle._id} battle={battle} />
             ))}
           </div>
@@ -160,9 +162,10 @@ const BattleCard = ({ battle }) => {
   const handleBattleJoin = async (battleId) => {
     try {
       await registerBattle(battleId, user._id);
+      navigate(`/battles/${battleId}`);
       toast.success("Joined Battle");
     } catch (error) {
-      toast.error("failed to join battle");
+      toast.error("Login to join battle");
     }
   }
   const getModeIcon = () => {
@@ -224,7 +227,7 @@ const BattleCard = ({ battle }) => {
       <motion.div whileHover={{ scale: 1.02 }} className="mt-6">
         <Link
           onClick= {() => {handleBattleJoin(battle._id)}}
-          to={`/battles/${battle._id}`}
+          // to={`/battles/${battle._id}`}
           className="w-full block text-center py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
         >
           {battle.status === 'completed' ? 'View Results' : 'Join Battle →'}

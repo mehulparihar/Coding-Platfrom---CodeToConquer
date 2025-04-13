@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import {
   FiUsers,
@@ -24,7 +24,7 @@ import 'react-toastify/dist/ReactToastify.css';
 const defaultCodes = {
   cpp: `#include <bits/stdc++.h>
 using namespace std;
-
+  
 int main() {
     return 0;
 }`,
@@ -73,7 +73,9 @@ const SubmissionResult = ({ result }) => {
       {result.error && (
         <div className="mt-4 p-4 bg-red-50 dark:bg-red-900 rounded">
           <h3 className="text-red-600 dark:text-red-200 font-medium mb-2">Error:</h3>
-          <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{result.error}</pre>
+          <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">
+            {result.error}
+          </pre>
         </div>
       )}
     </div>
@@ -89,20 +91,20 @@ const BattlePage = () => {
   const [submissionError, setSubmissionError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
-  const [messages, setMessages] = useState([]); // Local state for chat messages
+  const [messages, setMessages] = useState([]);
   const [timeLeft, setTimeLeft] = useState(0);
-  
+
   const { id } = useParams();
   const { getBattleById, battle, updateBattleState } = battleStore();
   const { user } = userStore();
-  
+  const navigate = useNavigate();
+
   const socket = useRef(null);
 
-  // Load battle details when id or battle update changes.
+  // Load battle data when the battle updates.
   useEffect(() => {
     const loadBattle = async () => {
       await getBattleById(id);
-      
       if (battle?.problem?.starterCodes) {
         setCodes({
           python: battle.problem.starterCodes.python || defaultCodes.python,
@@ -111,52 +113,47 @@ const BattlePage = () => {
           javascript: defaultCodes.javascript
         });
       }
-      // Load participant's code if exists.
-      const participant = battle?.participants.find(p => p.user.toString() === user?._id.toString());
+      const participant = battle?.participants.find(
+        (p) => p.user.toString() === user?._id.toString()
+      );
       if (participant?.code) {
         setCodes(prev => ({ ...prev, [language]: participant.code }));
       }
     };
-
+    setTimeLeft((battle?.duration)*60);
     loadBattle();
-  }, [id, battle?.problem, user, language, getBattleById]);
+    // Set initial timeLeft using battle duration if available.
+    if (battle?.duration) setTimeLeft(Number(battle.duration) * 60);
+  }, [id, user, language, getBattleById]);
 
   // Initialize Socket.IO when user and battle id are available.
   useEffect(() => {
     if (!user?._id || !id) return;
-
     socket.current = io('http://localhost:5000', {
       withCredentials: true,
+      // Optionally send auth token:
       // auth: { token: localStorage.getItem('token') }
     });
-
     socket.current.on("connect", () => {
       console.log("Connected to Socket.IO backend:", socket.current.id);
     });
-
     socket.current.emit('joinBattle', { battleId: id, userId: user._id });
-
     socket.current.on('submissionResult', (result) => {
       setIsSubmitting(false);
       setSubmissionResult(result);
       setSubmissionError(null);
     });
-
     socket.current.on('submissionError', (error) => {
       setIsSubmitting(false);
       setSubmissionError(error);
     });
-
     socket.current.on('newMessage', (message) => {
-      // Assume backend sends { user: { _id, username }, text, timestamp }
       setMessages(prev => [...prev, message]);
     });
-
     socket.current.on('timeUpdate', ({ timeLeft, status }) => {
       setTimeLeft(Math.floor(timeLeft / 1000));
       updateBattleState({ status });
     });
-
     socket.current.on('battleCompleted', (updatedBattle) => {
       updateBattleState(updatedBattle);
       if (updatedBattle.status === 'completed' && updatedBattle.winner) {
@@ -165,7 +162,6 @@ const BattlePage = () => {
         });
       }
     });
-
     return () => {
       socket.current?.off("submissionResult");
       socket.current?.off("submissionError");
@@ -178,15 +174,27 @@ const BattlePage = () => {
 
   // Local timer: update every second based on battle.endTime.
   useEffect(() => {
-    if (battle && battle.endTime) {
-      const interval = setInterval(() => {
-        const now = new Date().getTime();
-        const end = new Date(battle.endTime).getTime();
-        const diff = Math.max(0, end - now);
-        setTimeLeft(Math.floor(diff / 1000));
-        if (diff <= 0) clearInterval(interval);
-      }, 1000);
-      return () => clearInterval(interval);
+    if (battle) {
+      let computedEnd;
+      if (battle.endTime) {
+        computedEnd = new Date(battle.endTime).getTime();
+      } else if (battle.startTime && battle.duration) {
+        computedEnd = new Date(battle.startTime).getTime() + Number(battle.duration) * 60000;
+      }
+      if (computedEnd) {
+        // Update immediately and then every second.
+        const updateTimer = () => {
+          const now = Date.now();
+          const diff = Math.max(0, computedEnd - now);
+          setTimeLeft(Math.floor(diff / 1000));
+        };
+        updateTimer(); // Immediate update after battle starts.
+        const interval = setInterval(() => {
+          updateTimer();
+          if (Date.now() >= computedEnd) clearInterval(interval);
+        }, 1000);
+        return () => clearInterval(interval);
+      }
     }
   }, [battle]);
 
@@ -207,7 +215,6 @@ const BattlePage = () => {
     setIsSubmitting(true);
     setSubmissionError(null);
     setSubmissionResult(null);
-    
     socket.current.emit('submitSolution', {
       battleId: id,
       userId: user._id,
@@ -235,33 +242,66 @@ const BattlePage = () => {
 
   if (!battle) return <div className="p-8 text-center">Loading battle...</div>;
 
+  // Check if the current user is the battle owner.
+  const isBattleOwner = battle.battleOwner && battle.battleOwner.toString() === user?._id.toString();
+  const getWinnerUsername = () => {
+    if (battle.status !== "completed" || !battle.participants || battle.participants.length === 0)
+      return null;
+    const solvedParticipants = battle.participants.filter(p => p.solved);
+    if (!solvedParticipants.length) return null;
+    const winnerParticipant = solvedParticipants.sort((a, b) => a.completionTime - b.completionTime)[0];
+    return winnerParticipant?.user?.username || null;
+  };
+
+  const winnerUsername = getWinnerUsername();
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Winner Banner */}
+        {battle.status === 'completed' && winnerUsername && (
+          <div className="mb-4 p-4 rounded-lg bg-green-100 text-green-800 text-center font-bold">
+            Battle Completed! Winner: {winnerUsername}
+          </div>
+        )}
+
         {/* Battle Header */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">{battle.title}</h1>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="px-2 py-1 rounded-full text-sm bg-purple-100 text-purple-800">
-                  {battle.difficulty}
-                </span>
-                <span className="flex items-center gap-1">
-                  <FiUsers className="text-gray-500" />
-                  {battle.currentParticipants}/{battle.maxParticipants}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <FiClock className="text-gray-500" />
-                <span>{formatTime(timeLeft)}</span>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800">
-                {battle.status}
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{battle.title}</h1>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="px-2 py-1 rounded-full text-sm bg-purple-100 text-purple-800">
+                {battle.difficulty}
+              </span>
+              <span className="flex items-center gap-1">
+                <FiUsers className="text-gray-500" />
+                {battle.currentParticipants}/{battle.maxParticipants}
               </span>
             </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span>Battle code: {battle.battleCode}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <FiClock className="text-gray-500" />
+              <span>{formatTime(timeLeft)}</span>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800">
+              {battle.status}
+            </span>
+            {battle.status === "waiting" && isBattleOwner && (
+              <button
+                onClick={() => {
+                  socket.current.emit("startBattle", { battleId: id, userId: user._id });
+                  // Immediately ask the backend to start the timer
+                  socket.current.emit("startTimer", id);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-all"
+              >
+                Start Battle
+              </button>
+            )}
           </div>
         </div>
 
@@ -274,7 +314,7 @@ const BattlePage = () => {
                 <FiCode className="text-blue-500" /> Problem Statement
               </h2>
               <div className="flex flex-wrap gap-2 mb-4">
-                {battle.problem.tags.map(tag => (
+                {battle?.problem?.tags.map(tag => (
                   <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm dark:bg-blue-900 dark:text-blue-200">
                     {tag}
                   </span>
@@ -286,11 +326,10 @@ const BattlePage = () => {
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === tab
+                      className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab
                           ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                           : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                      }`}
+                        }`}
                     >
                       {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </button>
@@ -373,11 +412,10 @@ const BattlePage = () => {
                 <button
                   onClick={handleCodeSubmit}
                   disabled={isSubmitting || battle.status !== 'active'}
-                  className={`px-4 py-2 text-white rounded-md text-sm font-medium transition-all ${
-                    isSubmitting || battle.status !== 'active'
+                  className={`px-4 py-2 text-white rounded-md text-sm font-medium transition-all ${isSubmitting || battle.status !== 'active'
                       ? 'bg-gray-600 cursor-not-allowed'
                       : 'bg-green-600 hover:bg-green-700'
-                  }`}
+                    }`}
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Solution'}
                 </button>

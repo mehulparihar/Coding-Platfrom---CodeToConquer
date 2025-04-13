@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.post("/create", protectRoute, createBattle);
 router.post("/join/:battleId", protectRoute, joinBattle);
-router.post("/join/private", protectRoute, joinPrivateBattle);
+router.post("/private/join", protectRoute, joinPrivateBattle);
 router.get("/", getAllBattles);
 router.get("/:id", getBattleById);
 router.post("/submit/:battleId", protectRoute, submitBattleCode);

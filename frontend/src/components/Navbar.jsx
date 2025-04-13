@@ -106,12 +106,7 @@ const Navbar = () => {
                         >
                             Leaderboard
                         </Link>
-                        <Link
-                            to="/ai-helper"
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300"
-                        >
-                            AI Assistant
-                        </Link>
+                        
                         {user?.role == "admin" && 
                         <Link
                         to="/dashboard"
