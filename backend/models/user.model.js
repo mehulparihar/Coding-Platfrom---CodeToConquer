@@ -17,17 +17,17 @@ const userSchema = new mongoose.Schema({
         minlength: [6, "Password must be at least 6 character long"],
         required: [true, "Password is required"]
     },
-    score : {
+    score: {
         type: Number,
         default: 0
     },
     dailyScore: {
-        type : Number,
-        default : 0
+        type: Number,
+        default: 0
     },
     weeklyScore: {
-        type : Number,
-        default : 0
+        type: Number,
+        default: 0
     },
     role: {
         type: String,
@@ -46,12 +46,12 @@ const userSchema = new mongoose.Schema({
         default: false
     },
     problemsSolved: {
-        type : Number,
-        default : 0
+        type: Number,
+        default: 0
     },
-    battleWon : {
-        type : Number,
-        default : 0
+    battleWon: {
+        type: Number,
+        default: 0
     },
     submissions: [{
         type: mongoose.Schema.Types.ObjectId,

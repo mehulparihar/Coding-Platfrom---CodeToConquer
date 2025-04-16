@@ -22,13 +22,10 @@ const connectRedis = async () => {
     }
 };
 
-const lpushAsync = promisify(client.lPush).bind(client)
-const rpopAsync = promisify(client.rPop).bind(client)
+
 
 export {
     client,
-    lpushAsync,
-    rpopAsync,
     connectRedis
 };
 

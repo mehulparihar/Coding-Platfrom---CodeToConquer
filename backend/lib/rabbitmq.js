@@ -1,10 +1,14 @@
 import amqplib from "amqplib";
 
-const RABBITMQ_URL = "amqp://localhost"; // Update if running remotely
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
 
 export const connectQueue = async () => {
-  const connection = await amqplib.connect(RABBITMQ_URL);
-  const channel = await connection.createChannel();
-  await channel.assertQueue("code_submissions");
-  return channel;
+  try {
+    const connection = await amqplib.connect(RABBITMQ_URL);
+    const channel = await connection.createChannel();
+    await channel.assertQueue("code_submissions");
+    return channel;
+  } catch (error) {
+    console.log("error" + error.message);
+  }
 };

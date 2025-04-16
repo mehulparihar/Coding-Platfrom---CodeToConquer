@@ -26,7 +26,7 @@ export const createContest = async (req, res) => {
 
 export const getAllUpcommingContest = async (req, res) => {
     try {
-        const contests = await Contest.find().populate('problems', 'title difficulty') 
+        const contests = await Contest.find().populate('problems', 'title difficulty')
             .sort('startTime')
             .lean();
 
@@ -64,7 +64,6 @@ export const joinContest = async (req, res) => {
             await contest.save();
         }
 
-
         res.send(contest);
     } catch (error) {
         res.status(500).send(err.message);
@@ -75,45 +74,41 @@ export const submitSolution = async (req, res) => {
     const { user_id, problem_id, code, language } = req.body;
     try {
         const contest = await Contest.findById(req.params.contestId)
-        .populate('problems')
-        .populate('participants.user');
-        
+            .populate('problems')
+            .populate('participants.user');
+
         if (!contest) return res.status(404).json({ error: "Contest not found" });
-        
+
         const now = new Date();
         if (now < contest.startTime || now > contest.endTime) {
-                return res.status(400).json({ error: "Contest is not active" });
-            }
-            
-            // 2. Validate problem belongs to contest
-            const problem = contest.problems.find(p => p._id.toString() === problem_id.toString());
-            if (!problem) return res.status(400).json({ error: "Problem not in contest" });
-            
-            // // 3. Validate user participation
-            const participant = contest.participants.find(p => p.user._id.toString() === user_id);
-            if (!participant) return res.status(403).json({ error: "User not registered for contest" });
-            
-            const submission = await Submission.create({
-                user: user_id,
-                problem: problem_id,
-                contest : req.params.contestId,
-                code,
-                language,
-            });
-            
-            await Problems.findByIdAndUpdate(problem_id, { $inc: { attemptCount: 1 } });
-            
-            participant.submissions.push({
-                    submission: submission._id,
-                    timestamp: new Date()
-                });
-                console.log("test");
+            return res.status(400).json({ error: "Contest is not active" });
+        }
+
+        const problem = contest.problems.find(p => p._id.toString() === problem_id.toString());
+        if (!problem) return res.status(400).json({ error: "Problem not in contest" });
+
+        const participant = contest.participants.find(p => p.user._id.toString() === user_id);
+        if (!participant) return res.status(403).json({ error: "User not registered for contest" });
+
+        const submission = await Submission.create({
+            user: user_id,
+            problem: problem_id,
+            contest: req.params.contestId,
+            code,
+            language,
+        });
+
+        await Problems.findByIdAndUpdate(problem_id, { $inc: { attemptCount: 1 } });
+
+        participant.submissions.push({
+            submission: submission._id,
+            timestamp: new Date()
+        });
 
         const channel = await channelPromise;
-        channel.sendToQueue("submissions", 
+        channel.sendToQueue("submissions",
             Buffer.from(JSON.stringify({
                 submissionId: submission._id,
-                // testCases: problem.testCases,
             }))
         );
         res.status(202).json(submission);

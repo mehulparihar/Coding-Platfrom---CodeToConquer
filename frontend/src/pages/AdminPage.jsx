@@ -7,7 +7,6 @@ import Modal from 'react-modal';
 import { MdComputer } from 'react-icons/md';
 import toast from 'react-hot-toast';
 
-// Modal.setAppElement('#root');
 
 const AdminPage = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -50,9 +49,7 @@ const AdminPage = () => {
   const handleProblemSubmit = async (e) => {
     e.preventDefault();
     try {
-      // if (selectedProblem) {
-      //   await updateProblem(selectedProblem._id, problemForm);
-      // } else {
+      
         await createProblem(problemForm);
       // }
       setIsProblemModalOpen(false);

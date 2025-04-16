@@ -13,4 +13,5 @@ COPY backend/ ./backend
 WORKDIR /app/backend
 
 EXPOSE 5000
-CMD ["node", "backend/server.js"]
+
+CMD ["npm", "run", "dev"]

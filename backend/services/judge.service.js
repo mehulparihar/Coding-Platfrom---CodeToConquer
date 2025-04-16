@@ -1,5 +1,4 @@
 import Docker from "dockerode";
-import { client } from "../lib/redis.js";
 import Submission from "../models/submission.model.js";
 import Problems from "../models/problem.model.js";
 import User from "../models/user.model.js";
@@ -10,8 +9,9 @@ import Contest from "../models/contest.model.js";
 import Battle from "../models/battle.model.js";
 
 const docker = new Docker();
-const RABBITMQ_URL = "amqp://localhost";
-const TIMEOUT = 5000; // 5 seconds
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
+const TIMEOUT = 5000;
+
 
 const getImage = (language) => {
   const images = {
@@ -65,11 +65,9 @@ const calculateScore = (submission) => {
 const updateBattleStatus = async (submission) => {
   const battle = await Battle.findById(submission.battle);
   if (!battle) {
-    console.log("Battle not found.");
     return;
   }
   if (battle.status === "completed") {
-    console.log("Battle already completed.");
     return;
   }
   const userId = submission.user._id;
@@ -78,7 +76,6 @@ const updateBattleStatus = async (submission) => {
   );
 
   if (participantIndex === -1) {
-    console.log("User not found in battle participants.");
     return;
   }
 
@@ -87,20 +84,17 @@ const updateBattleStatus = async (submission) => {
   battle.participants[participantIndex].completionTime = completionTime;
   battle.participants[participantIndex].submissionStatus = "passed";
 
-  // Check if there is at least one successful submission
+
   const solvedParticipants = battle.participants.filter(p => p.solved);
   if (solvedParticipants.length > 0) {
-    // Sort participants by completion time (fastest wins)
-    solvedParticipants.sort((a, b) => a.completionTime - b.completionTime);
 
-    // Update battle status when at least one person has solved
+    solvedParticipants.sort((a, b) => a.completionTime - b.completionTime);
     battle.status = "completed";
     battle.winner = solvedParticipants[0]._id;
-    battle.score = 100; // Adjust scoring logic as needed
+    battle.score = 100;
   }
 
   await battle.save();
-  console.log("Battle status updated successfully.");
 };
 
 const updateContestLeaderboard = async (submission) => {
@@ -109,18 +103,15 @@ const updateContestLeaderboard = async (submission) => {
   const problemId = submission.problem._id;
   const score = calculateScore(submission);
 
-  // Find contest
   const contest = await Contest.findById(contestId);
 
   if (!contest) {
-    console.error("Contest not found.");
     return;
   }
 
   let participant = contest.participants.find((p) => p.user.toString() === userId.toString());
 
   if (!participant) {
-    // If user is not a participant, add them
     participant = {
       user: userId,
       submissions: [],
@@ -129,11 +120,9 @@ const updateContestLeaderboard = async (submission) => {
     contest.participants.push(participant);
   }
 
-  // Check if the user has already submitted and passed this problem
   const existingSubmission = participant.submissions.find((sub) => sub.problem.toString() === problemId.toString());
 
   if (!existingSubmission || !existingSubmission.passed) {
-    // Update participant data
     participant.submissions.push({
       problem: problemId,
       code: submission.code,
@@ -141,17 +130,17 @@ const updateContestLeaderboard = async (submission) => {
       timestamp: new Date(),
     });
 
-    participant.score += score; // Increase score
+    participant.score += score;
   }
 
-  await contest.save(); // Save contest updates
+  await contest.save();
 };
 
 
 const runCodeInContainer = async (submission, testCase) => {
   let container;
   try {
-    // 1. Create container with proper I/O config
+
     container = await docker.createContainer({
       Image: getImage(submission.language),
       Cmd: ["sh", "-c", "sleep 2"],
@@ -160,20 +149,19 @@ const runCodeInContainer = async (submission, testCase) => {
         Memory: 536870912,
         NetworkMode: "none",
       },
-      WorkingDir: "/app", // Set working directory
+      WorkingDir: "/app",
       OpenStdin: true,
       Tty: false,
     });
 
     await container.start();
-    console.log("Container started");
 
-    // 2. Build the code inside the container.
     const buildExec = await container.exec({
       Cmd: buildCommand(submission),
       AttachStdout: true,
       AttachStderr: true,
     });
+
     const buildOutput = await new Promise((resolve, reject) => {
       const outputStream = new PassThrough();
       let output = "";
@@ -187,10 +175,7 @@ const runCodeInContainer = async (submission, testCase) => {
         stream.on("error", reject);
       });
     });
-    // console.log("Build Output:\n", buildOutput);
-    // console.log("Build completed!");
 
-    // 3. Run the compiled code with the test case input.
     const exec = await container.exec({
       Cmd: [
         "sh",
@@ -214,7 +199,6 @@ const runCodeInContainer = async (submission, testCase) => {
         stream.on("error", reject);
       });
     });
-    console.log("Runtime Output:\n", output);
     return {
       output,
       status: output ? "Completed" : "Runtime Error",
@@ -230,20 +214,18 @@ const runCodeInContainer = async (submission, testCase) => {
 const processSubmission = async (submissionId) => {
   try {
     const submission = await Submission.findById(submissionId)
-      .populate("problem")
-      .populate("user")
-      .populate("contest")
-      .populate("battle");
-
+    .populate("problem")
+    .populate("user")
+    .populate("contest")
+    .populate("battle");
+    
     const isContestSubmission = !!submission.contest;
     const isBattleSubmission = !!submission.battle;
     const results = [];
-
-    // Process each test case separately
+    
     for (const testCase of submission.problem.testCases) {
       const result = await runCodeInContainer(submission, testCase);
       const passed = result.output === testCase.expected_output.trim();
-      console.log("Test Passed:", passed);
       results.push({
         input: testCase.input,
         expected: testCase.expected_output,
@@ -251,9 +233,8 @@ const processSubmission = async (submissionId) => {
         passed,
       });
     }
-
+    
     const allPassed = results.every((r) => r.passed);
-    console.log("All Passed:", allPassed);
 
     await Submission.findByIdAndUpdate(submissionId, {
       status: allPassed ? "Accepted" : "Wrong Answer",
@@ -265,12 +246,10 @@ const processSubmission = async (submissionId) => {
       const currentDate = new Date().setHours(0, 0, 0, 0);
       const dailyChallenge = await DailyChallenge.findOne({ date: currentDate });
       if (isContestSubmission) {
-        console.log("Updating contest leaderboard...");
         await updateContestLeaderboard(submission);
       }
 
       if (isBattleSubmission) {
-        console.log("Updating battle status...");
         await updateBattleStatus(submission);
       }
 
@@ -305,7 +284,6 @@ const processSubmission = async (submissionId) => {
       );
     }
   } catch (error) {
-    console.error(`Error processing ${submissionId}:`, error);
     await Submission.findByIdAndUpdate(submissionId, {
       result: "Runtime Error",
       error: error.message,
@@ -313,7 +291,7 @@ const processSubmission = async (submissionId) => {
   }
 };
 
-// Start worker
+
 const startJudgeWorker = async () => {
   while (true) {
     const connection = await amqplib.connect(RABBITMQ_URL);
@@ -321,7 +299,6 @@ const startJudgeWorker = async () => {
     await channel.assertQueue("submissions");
     channel.consume("submissions", async (msg) => {
       const { submissionId } = JSON.parse(msg.content.toString());
-      console.log("Processing submission:", submissionId);
       await processSubmission(submissionId);
       channel.ack(msg);
     });

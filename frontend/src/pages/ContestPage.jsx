@@ -2,12 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { contestStore } from '../stores/contestStore';
 import { problemStore } from '../stores/problemStore';
-import { FiClock, FiUsers, FiCode, FiAward } from 'react-icons/fi';
-import { motion } from 'framer-motion';
+import { FiClock, FiUsers, FiCode, FiAward, FiZap, FiCheckCircle } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
 import { userStore } from '../stores/userStore';
-
-
 
 const ContestPage = () => {
     const { id } = useParams();
@@ -16,8 +14,8 @@ const ContestPage = () => {
     const { problems } = problemStore();
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
     const [contestStatus, setContestStatus] = useState('upcoming');
-    const [progress, setProgress] = useState(0);
     const { user } = userStore();
+
     useEffect(() => {
         const loadContest = async () => {
             await fetchContestById(id);
@@ -25,22 +23,13 @@ const ContestPage = () => {
         loadContest();
     }, [id]);
 
-    const handleSolveClick = (problemId) => {
-        if (contest) {
-            navigate(`/contests/${contest._id}/${problemId}`);
-        } else {
-            navigate(`/problems/${problemId}`);
-        }
-    }
-
     useEffect(() => {
         const updateTimer = () => {
             if (!contest) return;
             const now = new Date();
             const start = new Date(contest.startTime);
             const end = new Date(contest.endTime);
-            const totalDuration = end - start;
-            const elapsed = now - start;
+            
             if (now < start) {
                 const diff = start - now;
                 setContestStatus('upcoming');
@@ -59,93 +48,101 @@ const ContestPage = () => {
         return () => clearInterval(interval);
     }, [contest]);
 
-
     const calculateTimeParts = (ms) => {
-        const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((ms % (1000 * 60)) / 1000);
-        return { days, hours, minutes, seconds };
+        return {
+            days: Math.floor(ms / (1000 * 60 * 60 * 24)),
+            hours: Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+            minutes: Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60)),
+            seconds: Math.floor((ms % (1000 * 60)) / 1000)
+        };
     };
 
-    if (!contest) return <div>Loading contest...</div>;
+    if (!contest) return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+            <div className="animate-pulse text-2xl text-gray-400">Loading contest...</div>
+        </div>
+    );
 
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 p-8">
+            <div className="max-w-7xl mx-auto space-y-8">
                 {/* Contest Header */}
-                <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-4">{contest.title}</h1>
-                    <div className="flex items-center gap-4 text-gray-600 mb-4">
-                        <span className="flex items-center gap-2">
-                            <FiClock /> {contestStatus.charAt(0).toUpperCase() + contestStatus.slice(1)}
-                        </span>
-                        <span className="flex items-center gap-2">
-                            <FiUsers /> {contest.participants.length} Participants
-                        </span>
+                <motion.div
+                    initial={{ y: -20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-white/20"
+                >
+                    <div className="flex items-start justify-between mb-6">
+                        <div>
+                            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                {contest.title}
+                            </h1>
+                            <div className="flex items-center gap-4 mt-4 text-gray-500 dark:text-gray-400">
+                                <div className="flex items-center gap-2">
+                                    <FiClock className="h-5 w-5" />
+                                    <span className="font-medium">{contestStatus.charAt(0).toUpperCase() + contestStatus.slice(1)}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <FiUsers className="h-5 w-5" />
+                                    <span>{contest.participants.length} Participants</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-gradient-to-br from-blue-500 to-purple-500 p-2 rounded-xl">
+                            <span className="text-white text-sm font-medium px-3 py-1">
+                                {Math.floor((new Date(contest.endTime) - new Date(contest.startTime)) / (1000 * 60 * 60))}h
+                            </span>
+                        </div>
                     </div>
 
+                    {/* Time Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <div className="text-sm text-gray-500">Start Time</div>
-                            <div className="font-medium">
-                                {new Date(contest.startTime).toLocaleDateString()}{" "}
-                                {new Date(contest.startTime).toLocaleTimeString()}
+                        {Object.entries(timeLeft).map(([unit, value]) => (
+                            <div key={unit} className="bg-white/70 dark:bg-gray-700/50 backdrop-blur-lg p-4 rounded-xl shadow-sm">
+                                <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                    {value.toString().padStart(2, '0')}
+                                </div>
+                                <div className="text-sm text-gray-500 uppercase mt-1">{unit}</div>
                             </div>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <div className="text-sm text-gray-500">End Time</div>
-                            <div className="font-medium">
-                                {new Date(contest.endTime).toLocaleDateString()}{" "}
-                                {new Date(contest.endTime).toLocaleTimeString()}
-                            </div>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <div className="text-sm text-gray-500">Duration</div>
-                            <div className="font-medium">
-                                {Math.floor((new Date(contest.endTime) - new Date(contest.startTime)) / (1000 * 60 * 60))} Hours
-                            </div>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <div className="text-sm text-gray-500">Problems</div>
-                            <div className="font-medium">{contest.problems.length}</div>
-                        </div>
+                        ))}
                     </div>
 
-                    {contestStatus === 'upcoming' && (
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                            <div className="flex items-center gap-4">
-                                <div className="text-2xl font-bold">
-                                    {timeLeft.days}d {timeLeft.hours}h {timeLeft.minutes}m {timeLeft.seconds}s
-                                </div>
-                                <span className="text-blue-600">Until contest starts</span>
-                            </div>
+                    {/* Status Banner */}
+                    <div className={`p-4 rounded-xl ${
+                        contestStatus === 'upcoming' ? 'bg-blue-100/50 dark:bg-blue-900/30' :
+                        contestStatus === 'active' ? 'bg-green-100/50 dark:bg-green-900/30' :
+                        'bg-gray-100/50 dark:bg-gray-700/30'
+                    }`}>
+                        <div className="flex items-center gap-3">
+                            <FiZap className={`h-6 w-6 ${
+                                contestStatus === 'upcoming' ? 'text-blue-500' :
+                                contestStatus === 'active' ? 'text-green-500' :
+                                'text-gray-500'
+                            }`} />
+                            <span className="font-medium">
+                                {contestStatus === 'upcoming' ? 'Contest starts in' :
+                                contestStatus === 'active' ? 'Time remaining' :
+                                'Contest has ended'}
+                            </span>
                         </div>
-                    )}
-
-                    {contestStatus === 'active' && (
-                        <div className="bg-green-50 p-4 rounded-lg">
-                            <div className="flex items-center gap-4">
-                                <div className="text-2xl font-bold">
-                                    {timeLeft.days}d {timeLeft.hours}h {timeLeft.minutes}m {timeLeft.seconds}s
-                                </div>
-                                <span className="text-green-600">Remaining</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                    </div>
+                </motion.div>
 
                 {(contestStatus === 'active' || contestStatus === 'ended') && (
                     <div className="grid lg:grid-cols-3 gap-8">
                         {/* Problems List */}
-                        <div className="lg:col-span-2">
-                            <div className="bg-white rounded-xl shadow-lg p-6">
-                                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                                    <FiCode /> Problems to Solve
+                        <div className="lg:col-span-2 space-y-6">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl p-6"
+                            >
+                                <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-gray-800 dark:text-white">
+                                    <FiCode className="h-7 w-7 text-purple-500" />
+                                    Problems to Solve
                                 </h2>
                                 <div className="space-y-4">
                                     {contest.problems.map((problem, index) => {
-                                        // Define the solved status inline
                                         const participant = contest?.participants?.find(
                                             p => p.user._id.toString() === user?._id.toString()
                                         );
@@ -158,115 +155,117 @@ const ContestPage = () => {
                                                 key={problem._id}
                                                 initial={{ opacity: 0, y: 10 }}
                                                 animate={{ opacity: 1, y: 0 }}
-                                                // Make the entire card clickable
                                                 onClick={() => navigate(`/contests/${contest._id}/${problem._id}`)}
-                                                className="border-b pb-4 last:border-0 hover:shadow-lg transition-all p-4 rounded-lg cursor-pointer"
+                                                className="group bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm p-4 rounded-xl border border-white/30 dark:border-gray-600/50 hover:shadow-lg transition-all cursor-pointer"
                                             >
                                                 <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <div className="font-medium">
-                                                            {index + 1}. {problem?.title || 'Loading...'}
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-lg font-medium text-gray-800 dark:text-white">
+                                                                {index + 1}. {problem?.title}
+                                                            </span>
                                                             {isSolved && (
-                                                                <span className="ml-2 text-sm text-green-700 font-semibold">(Solved)</span>
+                                                                <FiCheckCircle className="h-5 w-5 text-green-500" />
                                                             )}
                                                         </div>
-                                                        <div className="flex items-center gap-2 mt-2">
-                                                            <span className={`text-sm px-2 py-1 rounded-full ${problem?.difficulty === 'Easy'
-                                                                    ? 'bg-green-100 text-green-800'
-                                                                    : problem?.difficulty === 'Medium'
-                                                                        ? 'bg-yellow-100 text-yellow-800'
-                                                                        : 'bg-red-100 text-red-800'
-                                                                }`}>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                                                problem?.difficulty === 'Easy' ? 'bg-green-100/50 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                                                                problem?.difficulty === 'Medium' ? 'bg-yellow-100/50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                                                                'bg-red-100/50 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                                                            }`}>
                                                                 {problem?.difficulty}
                                                             </span>
-                                                            <span className="text-sm text-gray-500">{problem?.solveCount} solves</span>
+                                                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                                {problem?.solveCount} solves
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                    <div>
-                                                        {isSolved ? (
-                                                            <button
-                                                                className="px-4 py-2 bg-green-600 text-white rounded-full text-sm font-medium cursor-not-allowed"
-                                                                disabled
-                                                            >
-                                                                Solved
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation(); // Prevent triggering card onClick
-                                                                    handleSolveClick(problem._id);
-                                                                }}
-                                                                className="px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 transition-all"
-                                                            >
-                                                                Solve
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(`/contests/${contest._id}/${problem._id}`);
+                                                        }}
+                                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                                            isSolved 
+                                                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                                                                : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:shadow-lg'
+                                                        }`}
+                                                    >
+                                                        {isSolved ? 'Solved' : 'Solve →'}
+                                                    </button>
                                                 </div>
                                             </motion.div>
                                         );
                                     })}
-
                                 </div>
-                            </div>
+                            </motion.div>
                         </div>
 
                         {/* Live Leaderboard */}
-                        <div className="bg-white rounded-xl shadow-lg p-6 h-fit">
-                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                                <FiAward /> Live Leaderboard
+                        <motion.div 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl p-6 h-fit"
+                        >
+                            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-gray-800 dark:text-white">
+                                <FiAward className="h-7 w-7 text-yellow-500" />
+                                Live Leaderboard
                             </h2>
                             <div className="space-y-4">
                                 {contest.participants
-                                    .sort((a, b) =>
-                                        b.score - a.score ||
-                                        a.submissions.reduce((acc, sub) => Math.min(acc, new Date(sub.timestamp)), Infinity) -
-                                        b.submissions.reduce((acc, sub) => Math.min(acc, new Date(sub.timestamp)), Infinity)
-                                    )
+                                    .sort((a, b) => b.score - a.score)
                                     .slice(0, 5)
-                                    .map((participant, index) => {
-                                        const lastSubmission = participant.submissions.length > 0
-                                            ? new Date(Math.max(...participant.submissions.map(s => new Date(s.timestamp))))
-                                            : null;
-
-                                        return (
-                                            <div key={participant.user._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                <div className="flex items-center gap-4">
-                                                    <span className="font-medium">#{index + 1}</span>
-                                                    <div>
-                                                        <div className="font-medium">{participant.user.username}</div>
-                                                        <div className="text-sm text-gray-500">
-                                                            {lastSubmission && `Finished at ${lastSubmission.toLocaleTimeString()}`}
-                                                        </div>
+                                    .map((participant, index) => (
+                                        <div key={participant.user._id} className="flex items-center justify-between p-3 bg-white/50 dark:bg-gray-700/50 rounded-lg backdrop-blur-sm">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                                    index === 0 ? 'bg-gradient-to-br from-yellow-400 to-orange-400 text-white' :
+                                                    index === 1 ? 'bg-gradient-to-br from-gray-400 to-gray-600 text-white' :
+                                                    index === 2 ? 'bg-gradient-to-br from-amber-600 to-yellow-700 text-white' :
+                                                    'bg-blue-500 text-white'
+                                                }`}>
+                                                    {index + 1}
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-gray-800 dark:text-white">
+                                                        {participant.user.username}
+                                                    </div>
+                                                    <div className="text-sm text-gray-500">
+                                                        Score: {participant.score}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <span className="font-medium">{participant.score}</span>
-                                                </div>
                                             </div>
-                                        );
-                                    })}
+                                            <div className="text-sm text-gray-500">
+                                                {participant.submissions.length} solves
+                                            </div>
+                                        </div>
+                                    ))}
 
-                                {contest.participants.length > 1 && (
+                                {contest.participants.length > 5 && (
                                     <Link
                                         to={`/contests/${contest._id}/leaderboard`}
-                                        className="block text-center p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                        className="block text-center p-3 text-blue-500 hover:bg-blue-50/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
                                     >
                                         View Full Leaderboard →
                                     </Link>
                                 )}
                             </div>
-                        </div>
+                        </motion.div>
                     </div>
                 )}
 
                 {contestStatus === 'upcoming' && (
-                    <div className="bg-white rounded-xl shadow-lg p-8">
-                        <h2 className="text-xl font-bold mb-4">Contest Description</h2>
-                        <div className="prose max-w-none">
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl p-8"
+                    >
+                        <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">Contest Description</h2>
+                        <div className="prose dark:prose-invert max-w-none">
                             {contest.description}
                         </div>
-                    </div>
+                    </motion.div>
                 )}
             </div>
         </div>

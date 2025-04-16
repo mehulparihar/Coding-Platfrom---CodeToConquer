@@ -46,13 +46,13 @@ const problemSchema = new mongoose.Schema({
         java: String
     },
     testCases: [testcaseSchema],
-    attemptCount: { 
-        type: Number, 
-        default: 0 
+    attemptCount: {
+        type: Number,
+        default: 0
     },
-    solveCount: { 
-        type: Number, 
-        default: 0 
+    solveCount: {
+        type: Number,
+        default: 0
     },
     created_at: { type: Date, default: Date.now },
 })

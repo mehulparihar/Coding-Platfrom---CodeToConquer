@@ -1,5 +1,5 @@
 import express from "express";
-import { getLeaderboard, submitSolution,joinContest, getAllUpcommingContest, createContest, getContestById} from "../controllers/contest.controller.js";
+import { getLeaderboard, submitSolution, joinContest, getAllUpcommingContest, createContest, getContestById } from "../controllers/contest.controller.js";
 import { adminRoute, protectRoute } from "../middleware/auth.middleware.js";
 
 const router = express.Router();

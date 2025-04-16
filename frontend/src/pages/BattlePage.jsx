@@ -6,20 +6,28 @@ import {
   FiClock,
   FiCode,
   FiMessageSquare,
-  FiAward
+  FiAward,
+  FiStar,
+  FiAlertTriangle,
+  FiInfo
 } from 'react-icons/fi';
 import {
   ChevronLeftIcon,
   CodeBracketIcon,
   LightBulbIcon,
   CheckCircleIcon,
-  XCircleIcon
+  XCircleIcon,
+  SparklesIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline';
 import io from 'socket.io-client';
 import { battleStore } from '../stores/battleStore';
 import { userStore } from '../stores/userStore';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Tooltip } from 'react-tooltip';
+import UserAvatar from '../components/UserAvatar';
 
 const defaultCodes = {
   cpp: `#include <bits/stdc++.h>
@@ -42,47 +50,71 @@ if __name__ == "__main__":
 
 const SubmissionResult = ({ result }) => {
   if (!result) return null;
+  
   return (
-    <div className="mt-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-      <div className={`text-xl font-semibold mb-4 ${result.status === 'Accepted' ? 'text-green-600' : 'text-red-600'}`}>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-8 p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700"
+    >
+      <div className={`text-2xl font-bold mb-6 flex items-center gap-3 ${result.status === 'Accepted' ? 'text-emerald-600' : 'text-rose-600'}`}>
+        {result.status === 'Accepted' ? (
+          <CheckCircleIcon className="h-8 w-8" />
+        ) : (
+          <XCircleIcon className="h-8 w-8" />
+        )}
         {result.status}
       </div>
-      <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-4 font-medium text-gray-700 dark:text-gray-300">
+      
+      <div className="space-y-5">
+        <div className="grid grid-cols-4 gap-5 font-medium text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wide">
           <div>Test Case</div>
           <div>Status</div>
           <div>Output</div>
+          <div>Expected</div>
         </div>
+        
         {result.results?.map((testResult, index) => (
-          <div key={index} className="grid grid-cols-3 gap-4 p-3 bg-gray-50 dark:bg-gray-700 rounded">
-            <div className="text-sm">Case #{index + 1}</div>
-            <div className="flex items-center">
+          <div
+            key={index}
+            className="grid grid-cols-4 gap-5 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-gray-600"
+          >
+            <div className="text-sm font-medium">Case #{index + 1}</div>
+            <div className="flex items-center gap-2">
               {testResult.passed ? (
-                <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2" />
+                <CheckCircleIcon className="h-5 w-5 text-emerald-500" />
               ) : (
-                <XCircleIcon className="h-5 w-5 text-red-500 mr-2" />
+                <XCircleIcon className="h-5 w-5 text-rose-500" />
               )}
-              {testResult.passed ? 'Passed' : 'Failed'}
+              <span>{testResult.passed ? 'Passed' : 'Failed'}</span>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+            <div className="text-sm text-gray-600 dark:text-gray-300 font-mono whitespace-pre-wrap bg-gray-200 dark:bg-gray-800 p-2 rounded">
               {testResult.actual || 'No output'}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-300 font-mono whitespace-pre-wrap bg-gray-200 dark:bg-gray-800 p-2 rounded">
+              {testResult.expected}
             </div>
           </div>
         ))}
       </div>
+
       {result.error && (
-        <div className="mt-4 p-4 bg-red-50 dark:bg-red-900 rounded">
-          <h3 className="text-red-600 dark:text-red-200 font-medium mb-2">Error:</h3>
-          <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">
+        <div className="mt-6 p-4 bg-rose-50 dark:bg-rose-900 rounded-xl border border-rose-200 dark:border-rose-700">
+          <div className="flex items-center gap-2 text-rose-600 dark:text-rose-200 font-medium mb-3">
+            <FiAlertTriangle className="h-5 w-5" />
+            <h3>Runtime Error</h3>
+          </div>
+          <pre className="text-sm font-mono text-rose-700 dark:text-rose-300 whitespace-pre-wrap">
             {result.error}
           </pre>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
 const BattlePage = () => {
+  // All hook calls are declared at the top level.
   const [activeTab, setActiveTab] = useState('description');
   const [showHints, setShowHints] = useState(false);
   const [language, setLanguage] = useState('python');
@@ -93,15 +125,25 @@ const BattlePage = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [timeLeft, setTimeLeft] = useState(0);
-
+  
   const { id } = useParams();
   const { getBattleById, battle, updateBattleState } = battleStore();
   const { user } = userStore();
   const navigate = useNavigate();
-
+  
+  const chatEndRef = useRef(null);
+  const editorRef = useRef(null);
   const socket = useRef(null);
 
-  // Load battle data when the battle updates.
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Load battle data on mount/update.
   useEffect(() => {
     const loadBattle = async () => {
       await getBattleById(id);
@@ -120,10 +162,8 @@ const BattlePage = () => {
         setCodes(prev => ({ ...prev, [language]: participant.code }));
       }
     };
-    setTimeLeft((battle?.duration)*60);
-    loadBattle();
-    // Set initial timeLeft using battle duration if available.
     if (battle?.duration) setTimeLeft(Number(battle.duration) * 60);
+    loadBattle();
   }, [id, user, language, getBattleById]);
 
   // Initialize Socket.IO when user and battle id are available.
@@ -131,8 +171,6 @@ const BattlePage = () => {
     if (!user?._id || !id) return;
     socket.current = io('http://localhost:5000', {
       withCredentials: true,
-      // Optionally send auth token:
-      // auth: { token: localStorage.getItem('token') }
     });
     socket.current.on("connect", () => {
       console.log("Connected to Socket.IO backend:", socket.current.id);
@@ -172,7 +210,7 @@ const BattlePage = () => {
     };
   }, [id, user]);
 
-  // Local timer: update every second based on battle.endTime.
+  // Local timer based on battle.endTime.
   useEffect(() => {
     if (battle) {
       let computedEnd;
@@ -182,13 +220,12 @@ const BattlePage = () => {
         computedEnd = new Date(battle.startTime).getTime() + Number(battle.duration) * 60000;
       }
       if (computedEnd) {
-        // Update immediately and then every second.
         const updateTimer = () => {
           const now = Date.now();
           const diff = Math.max(0, computedEnd - now);
           setTimeLeft(Math.floor(diff / 1000));
         };
-        updateTimer(); // Immediate update after battle starts.
+        updateTimer();
         const interval = setInterval(() => {
           updateTimer();
           if (Date.now() >= computedEnd) clearInterval(interval);
@@ -240,168 +277,279 @@ const BattlePage = () => {
     return `${mins}:${secs}`;
   };
 
-  if (!battle) return <div className="p-8 text-center">Loading battle...</div>;
+  // Instead of an early return, conditionally render inside the main JSX.
+  const renderContent = () => {
+    if (!battle) {
+      return <div className="p-8 text-center">Loading battle...</div>;
+    }
 
-  // Check if the current user is the battle owner.
-  const isBattleOwner = battle.battleOwner && battle.battleOwner.toString() === user?._id.toString();
-  const getWinnerUsername = () => {
-    if (battle.status !== "completed" || !battle.participants || battle.participants.length === 0)
-      return null;
-    const solvedParticipants = battle.participants.filter(p => p.solved);
-    if (!solvedParticipants.length) return null;
-    const winnerParticipant = solvedParticipants.sort((a, b) => a.completionTime - b.completionTime)[0];
-    return winnerParticipant?.user?.username || null;
-  };
+    // Check if the current user is the battle owner.
+    const isBattleOwner = battle.battleOwner && battle.battleOwner.toString() === user?._id.toString();
+    const getWinnerUsername = () => {
+      if (battle.status !== "completed" || !battle.participants || battle.participants.length === 0)
+        return null;
+      const solvedParticipants = battle.participants.filter(p => p.solved);
+      if (!solvedParticipants.length) return null;
+      const winnerParticipant = solvedParticipants.sort((a, b) => a.completionTime - b.completionTime)[0];
+      return winnerParticipant?.user?.username || null;
+    };
 
-  const winnerUsername = getWinnerUsername();
+    const winnerUsername = getWinnerUsername();
+    
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-7xl mx-auto">
+    const getMedalColor = (position) => {
+      switch(position) {
+        case 0: return 'bg-gradient-to-r from-yellow-400 to-yellow-500';
+        case 1: return 'bg-gradient-to-r from-gray-400 to-gray-500';
+        case 2: return 'bg-gradient-to-r from-amber-600 to-amber-700';
+        default: return 'bg-gray-100 dark:bg-gray-700';
+      }
+    };
+
+    return (
+      <div className="space-y-8">
         {/* Winner Banner */}
-        {battle.status === 'completed' && winnerUsername && (
-          <div className="mb-4 p-4 rounded-lg bg-green-100 text-green-800 text-center font-bold">
-            Battle Completed! Winner: {winnerUsername}
-          </div>
-        )}
+        <AnimatePresence>
+          {battle.status === 'completed' && winnerUsername && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-center shadow-lg"
+            >
+              <div className="flex items-center justify-center gap-4">
+                <TrophyIcon className="h-8 w-8 text-yellow-300" />
+                <div>
+                  <h2 className="text-2xl font-bold">Battle Concluded!</h2>
+                  <p className="text-lg">Champion: {winnerUsername}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Battle Header */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{battle.title}</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="px-2 py-1 rounded-full text-sm bg-purple-100 text-purple-800">
-                {battle.difficulty}
-              </span>
-              <span className="flex items-center gap-1">
-                <FiUsers className="text-gray-500" />
-                {battle.currentParticipants}/{battle.maxParticipants}
-              </span>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+                {battle.title}
+                <span className="ml-3 text-sm px-3 py-1 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                  {battle.difficulty}
+                </span>
+              </h1>
+              <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-1.5">
+                  <FiUsers className="h-5 w-5" />
+                  <span>{battle.currentParticipants}/{battle.maxParticipants} Warriors</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <FiClock className="h-5 w-5" />
+                  <span className="font-mono">{formatTime(timeLeft)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 rounded-xl flex items-center gap-3">
+                <FiInfo className="h-5 w-5 text-purple-600" />
+                <span className="font-medium">Code: {battle.battleCode}</span>
+              </div>
+              {battle.status === "waiting" && isBattleOwner && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    socket.current.emit("startBattle", { battleId: id, userId: user._id });
+                    socket.current.emit("startTimer", id);
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                >
+                  Commence Battle
+                </motion.button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span>Battle code: {battle.battleCode}</span>
+
+          {/* Team Status */}
+          {battle.battleType === 'Team' && (
+            <div className="mt-6 grid grid-cols-2 gap-6">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900 rounded-xl border border-blue-200 dark:border-blue-700">
+                <h3 className="text-lg font-bold mb-3 text-blue-600 dark:text-blue-300">Team Alpha</h3>
+                <div className="flex items-center gap-3">
+                  {battle.teamA.map((member) => (
+                    <UserAvatar 
+                      user={member} 
+                      size="lg"
+                      className="border-2 border-blue-500"
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="p-4 bg-red-50 dark:bg-red-900 rounded-xl border border-red-200 dark:border-red-700">
+                <h3 className="text-lg font-bold mb-3 text-red-600 dark:text-red-300">Team Beta</h3>
+                <div className="flex items-center gap-3">
+                  {battle.teamB.map((member) => (
+                    <UserAvatar 
+                      user={member} 
+                      size="lg"
+                      className="border-2 border-red-500"
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <FiClock className="text-gray-500" />
-              <span>{formatTime(timeLeft)}</span>
-            </div>
-            <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800">
-              {battle.status}
-            </span>
-            {battle.status === "waiting" && isBattleOwner && (
-              <button
-                onClick={() => {
-                  socket.current.emit("startBattle", { battleId: id, userId: user._id });
-                  // Immediately ask the backend to start the timer
-                  socket.current.emit("startTimer", id);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-all"
-              >
-                Start Battle
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-8">
+          {/* Left Column */}
+          <div className="space-y-8">
             {/* Problem Section */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <FiCode className="text-blue-500" /> Problem Statement
-              </h2>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {battle?.problem?.tags.map(tag => (
-                  <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm dark:bg-blue-900 dark:text-blue-200">
-                    {tag}
-                  </span>
-                ))}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold flex items-center gap-3">
+                  <SparklesIcon className="h-7 w-7 text-purple-500" />
+                  Problem Statement
+                </h2>
+                <div className="flex gap-2">
+                  {battle?.problem?.tags.map(tag => (
+                    <span 
+                      key={tag}
+                      className="px-3 py-1 rounded-full bg-gradient-to-r from-purple-100 to-blue-100 text-purple-800 dark:from-purple-800 dark:to-blue-800 dark:text-purple-100 text-sm font-medium"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="border-b border-gray-200 dark:border-gray-700 mb-4">
+
+              {/* Tabs */}
+              <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                 <nav className="flex space-x-8">
                   {['description', 'testcases', 'hints'].map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab
-                          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                        activeTab === tab
+                          ? 'border-purple-500 text-purple-600 dark:text-purple-400'
                           : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                        }`}
+                      }`}
                     >
                       {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </button>
                   ))}
                 </nav>
               </div>
-              {activeTab === 'description' && (
-                <div className="prose dark:prose-invert max-w-none">
-                  <div dangerouslySetInnerHTML={{ __html: battle.problem.description.replace(/\n/g, '<br>') }} />
-                  {battle.problem.constraints && (
-                    <div className="mt-4 bg-orange-50 dark:bg-orange-900 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
-                      <h3 className="text-sm font-semibold text-orange-800 dark:text-orange-200 mb-2">Constraints</h3>
-                      <pre className="text-sm text-orange-700 dark:text-orange-300 whitespace-pre-wrap">
-                        {battle.problem.constraints}
-                      </pre>
+
+              {/* Content */}
+              <AnimatePresence mode='wait'>
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="space-y-6"
+                >
+                  {activeTab === 'description' && (
+                    <>
+                      <div 
+                        className="prose dark:prose-invert max-w-none text-gray-600 dark:text-gray-300"
+                        dangerouslySetInnerHTML={{ __html: battle.problem.description }}
+                      />
+                      {battle.problem.constraints && (
+                        <div className="p-5 bg-amber-50 dark:bg-amber-900 rounded-xl border border-amber-200 dark:border-amber-700">
+                          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-200 mb-3">
+                            <FiAlertTriangle className="h-5 w-5" />
+                            <h3 className="font-semibold">Important Constraints</h3>
+                          </div>
+                          <pre className="text-sm font-mono text-amber-800 dark:text-amber-300 whitespace-pre-wrap">
+                            {battle.problem.constraints}
+                          </pre>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {activeTab === 'testcases' && (
+                    <div className="space-y-5">
+                      {battle.problem.testCases
+                        .filter(testCase => !testCase.is_hidden)
+                        .map((testCase, index) => (
+                          <div 
+                            key={index}
+                            className="p-5 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
+                          >
+                            <div className="grid grid-cols-2 gap-5 text-sm">
+                              <div>
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+                                  INPUT
+                                </label>
+                                <pre className="font-mono p-3 bg-white dark:bg-gray-800 rounded-lg">
+                                  {testCase.input}
+                                </pre>
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+                                  EXPECTED OUTPUT
+                                </label>
+                                <pre className="font-mono p-3 bg-white dark:bg-gray-800 rounded-lg">
+                                  {testCase.expected_output}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   )}
-                </div>
-              )}
-              {activeTab === 'testcases' && (
-                <div className="space-y-4">
-                  {battle.problem.testCases
-                    .filter(testCase => !testCase.is_hidden)
-                    .map((testCase, index) => (
-                      <div key={index} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Input:</span>
-                            <pre className="mt-1 text-gray-600 dark:text-gray-200 whitespace-pre-wrap">
-                              {testCase.input}
-                            </pre>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Expected Output:</span>
-                            <pre className="mt-1 text-gray-600 dark:text-gray-200 whitespace-pre-wrap">
-                              {testCase.expected_output}
-                            </pre>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-              {activeTab === 'hints' && (
-                <div className="space-y-4">
-                  <button
-                    onClick={() => setShowHints(!showHints)}
-                    className="flex items-center text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
-                  >
-                    <LightBulbIcon className="h-5 w-5 mr-2" />
-                    {showHints ? 'Hide Hints' : 'Show Hints'}
-                  </button>
-                  {showHints && (
-                    <ul className="list-disc pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-                      {battle.problem.hints.map((hint, index) => (
-                        <li key={index}>{hint}</li>
-                      ))}
-                    </ul>
+
+                  {activeTab === 'hints' && (
+                    <div className="space-y-5">
+                      <button
+                        onClick={() => setShowHints(!showHints)}
+                        className="flex items-center gap-2 text-purple-600 hover:text-purple-700 dark:text-purple-400 font-medium"
+                      >
+                        <LightBulbIcon className="h-6 w-6" />
+                        {showHints ? 'Collapse Hints' : 'Reveal Strategic Insights'}
+                      </button>
+                      <AnimatePresence>
+                        {showHints && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-4"
+                          >
+                            {battle.problem.hints.map((hint, index) => (
+                              <div 
+                                key={index}
+                                className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border-l-4 border-purple-500"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="text-purple-500 font-bold">#{index + 1}</span>
+                                  <p className="text-gray-700 dark:text-gray-300">{hint}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   )}
-                </div>
-              )}
+                </motion.div>
+              </AnimatePresence>
             </div>
 
-            {/* Code Editor */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-              <div className="flex items-center justify-between px-6 py-3 bg-gray-800 border-b border-gray-700">
-                <div className="flex items-center space-x-4">
-                  <CodeBracketIcon className="h-5 w-5 text-gray-400" />
+            {/* Editor Section */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-t-2xl">
+                <div className="flex items-center gap-4">
+                  <CodeBracketIcon className="h-6 w-6 text-white" />
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    className="bg-gray-800 text-gray-200 px-3 py-1 rounded-md border border-gray-600 text-sm"
+                    className="bg-transparent text-white px-3 py-2 rounded-md border border-white/20 text-sm font-medium focus:ring-2 focus:ring-white"
                   >
                     <option value="python">Python</option>
                     <option value="cpp">C++</option>
@@ -409,17 +557,31 @@ const BattlePage = () => {
                     <option value="javascript">JavaScript</option>
                   </select>
                 </div>
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleCodeSubmit}
                   disabled={isSubmitting || battle.status !== 'active'}
-                  className={`px-4 py-2 text-white rounded-md text-sm font-medium transition-all ${isSubmitting || battle.status !== 'active'
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700'
-                    }`}
+                  className={`px-6 py-2.5 rounded-xl text-sm font-bold ${
+                    isSubmitting || battle.status !== 'active'
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-white text-purple-600 hover:bg-gray-50'
+                  }`}
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Solution'}
-                </button>
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      </svg>
+                      Submitting...
+                    </span>
+                  ) : (
+                    'Execute Solution'
+                  )}
+                </motion.button>
               </div>
+              
               <Editor
                 height="60vh"
                 language={language}
@@ -428,41 +590,77 @@ const BattlePage = () => {
                 theme="vs-dark"
                 options={{
                   minimap: { enabled: false },
-                  fontSize: 14
+                  fontSize: 14,
+                  scrollBeyondLastLine: false,
+                  smoothScrolling: true,
                 }}
+                onMount={(editor) => (editorRef.current = editor)}
+                className="rounded-b-2xl"
               />
             </div>
 
             {/* Submission Results */}
-            {submissionResult && <SubmissionResult result={submissionResult} />}
-            {submissionError && (
-              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900 rounded">
-                <p className="text-red-600 dark:text-red-200">{submissionError}</p>
-              </div>
-            )}
+            <AnimatePresence>
+              {submissionResult && (
+                <SubmissionResult result={submissionResult} />
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Sidebar */}
+          {/* Right Column */}
           <div className="space-y-8">
             {/* Leaderboard */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <FiAward className="text-yellow-500" /> Leaderboard
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                <FiAward className="h-7 w-7 text-amber-500" />
+                Leaderboard
               </h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {battle.participants
                   .sort((a, b) => (b.solved ? 1 : -1) || a.completionTime - b.completionTime)
                   .map((participant, index) => (
-                    <div key={participant._id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                      <div className="flex items-center gap-3">
-                        <span>#{index + 1}</span>
-                        <span>{participant.user?.username}</span>
-                        {participant.solved && <span className="text-green-500">✓</span>}
-                      </div>
-                      <div className="text-sm text-right">
-                        <div>{participant.executionTime || '--'}ms</div>
-                        <div className="text-gray-500">
-                          {participant.submissionStatus}
+                    <div 
+                      key={participant._id}
+                      className={`p-4 rounded-xl transition-all ${
+                        participant.user._id === user._id
+                          ? 'bg-purple-50 dark:bg-purple-900 border border-purple-200 dark:border-purple-700'
+                          : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getMedalColor(index)}`}>
+                            <span className="text-sm font-bold text-white">
+                              {index > 2 ? index + 1 : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <UserAvatar user={participant.user} size="md" />
+                            <div>
+                              <h3 className="font-medium">{participant.user.username}</h3>
+                              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                {participant.solved && (
+                                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                    <CheckCircleIcon className="h-4 w-4" />
+                                    Solved
+                                  </span>
+                                )}
+                                {participant.executionTime && (
+                                  <span>{participant.executionTime}ms</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium">
+                            {participant.submissionStatus}
+                          </div>
+                          {participant.completionTime && (
+                            <div className="text-xs text-gray-500">
+                              {formatTime(participant.completionTime)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -470,44 +668,70 @@ const BattlePage = () => {
               </div>
             </div>
 
-            {/* Chat */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <FiMessageSquare className="text-green-500" /> Chat
+            {/* Chat Section */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                <FiMessageSquare className="h-7 w-7 text-cyan-500" />
+                War Room Chat
               </h2>
-              <div className="h-64 overflow-y-auto mb-4">
+              <div className="h-96 overflow-y-auto pr-3 mb-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
                 {messages.map((message, index) => (
-                  <div key={index} className="mb-3 p-2 bg-gray-50 dark:bg-gray-700 rounded">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="font-semibold">{message.user?.username || message.user}</span>
-                      <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+                  <div 
+                    key={index}
+                    className={`flex ${message.user._id === user._id ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`max-w-[80%] p-3 rounded-2xl ${
+                      message.user._id === user._id 
+                        ? 'bg-purple-600 text-white rounded-br-none' 
+                        : 'bg-gray-100 dark:bg-gray-700 rounded-bl-none'
+                    }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <UserAvatar user={message.user} size="xs" />
+                        <span className="text-sm font-medium">
+                          {message.user._id === user._id ? 'You' : message.user.username}
+                        </span>
+                        <span className="text-xs opacity-75">
+                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-sm">{message.text}</p>
                     </div>
-                    <p className="text-gray-800 dark:text-gray-200">{message.text}</p>
                   </div>
                 ))}
+                <div ref={chatEndRef} />
               </div>
-              <div className="flex gap-2">
+              
+              <div className="flex gap-3">
                 <input
                   type="text"
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
-                  className="flex-1 px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                  placeholder="Type a message..."
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Send strategic message..."
+                  className="flex-1 px-4 py-2.5 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                 />
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleSendMessage}
-                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                  className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-medium shadow-md hover:bg-purple-700 transition-colors"
                 >
                   Send
-                </button>
+                </motion.button>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <ToastContainer />
-    </div>
+    );
+  };
+
+  return (
+    <>
+      {renderContent()}
+      <ToastContainer position="bottom-right" theme="colored" />
+    </>
   );
 };
 

@@ -17,7 +17,6 @@ export const battleStore = create((set, get) => ({
     getBattles : async () => {
         try {
             const response = await axios.get('/battles');
-            console.log(response.data);
             set({ battles: response.data });
         } catch (error) {
             toast.error(error.message.data.error || "Failed to fetch Battles");
@@ -35,8 +34,6 @@ export const battleStore = create((set, get) => ({
     getBattleById : async (id) => {
         try {
             const response = await axios.get(`/battles/${id}`);
-            console.log(response.data);
-            // if(!response) return toast.error("Failed to register contest");
             set({battle : response.data});
         } catch (error) {
             toast.error(error.message.data.error || "Failed to get contest");

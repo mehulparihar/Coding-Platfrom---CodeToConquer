@@ -1,6 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import { createBattle, getAllBattles, joinBattle,joinPrivateBattle,submitBattleCode,getBattleById } from "../controllers/battle.controller.js";
+import { createBattle, getAllBattles, joinBattle, joinPrivateBattle, submitBattleCode, getBattleById } from "../controllers/battle.controller.js";
 
 const router = express.Router();
 
