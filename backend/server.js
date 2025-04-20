@@ -49,7 +49,6 @@ if(process.env.NODE_ENV === "production"){
 
 const startServer = async () => {
     await connectDB();
-    await connectRedis();
     startJudgeWorker();
     socketHandler(httpServer);
     httpServer.listen(PORT, '0.0.0.0', () => {
