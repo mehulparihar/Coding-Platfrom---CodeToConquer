@@ -1,65 +1,53 @@
-version: '3.8'
+version: '2'
 
 services:
   backend:
     build:
-      context: .  # Root directory (CODETOCONQUER)
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: backend
     ports:
       - "5000:5000"
-    environment:
-      - NODE_ENV=development
-      - PORT= 5000
-      - MONGO_URI=mongodb://root:Qwerty@mongodb:27017/codetoconquer?authSource=admin
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://rabbitmq:5672
-      - ACCESS_TOKEN_SECRET=your_access_token_secret
-      - REFRESH_TOKEN_SECRET=your_refresh_token_secret
+    env_file:
+      - ./backend/.env
     volumes:
-      - ./backend:/app/backend   # Mount backend code for live updates in development
-      - ./package.json:/app/package.json
+      - ./backend:/app
+      # - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - app-network
-    restart: unless-stopped
 
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: frontend
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app/frontend   # Mount frontend code for live updates
-      - ./package.json:/app/package.json
-    environment:
-      - VITE_API_URL=http://localhost:5000  # Your API endpoint
+      - "5173:5173"    
     depends_on:
       - backend
+    volumes:
+      - ./frontend:/app
     networks:
       - app-network
-    restart: unless-stopped
 
-
-  mongodb:
-    image: mongo:6
-    container_name: mongodb
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: Qwerty
+  mongo:
+    image: mongo:latest
+    container_name: mongo
     ports:
       - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
     networks:
       - app-network
+    volumes:
+      - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "mongo", "--username", "root", "--password", "Qwerty", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -69,61 +57,60 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
     networks:
       - app-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"   # AMQP
-      - "15672:15672" # Management UI
-    volumes:
-      - rabbit_data:/var/lib/rabbitmq
+      - "5672:5672"  
+      - "15672:15672"
     networks:
       - app-network
+    volumes:
+      - rabbit_data:/data/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: always
-    
-  
 
   judge-worker:
     build:
-      context: .
-      dockerfile: backend/services/Dockerfile
-    # container_name: judge-worker
+      context: ./backend
+      dockerfile: judge.Dockerfile
     environment:
       - NODE_ENV=development
-      - RABBITMQ_URL=amqp://rabbitmq
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672/
       - DOCKER_SOCKET=/var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./backend:/app/backend
+      # - ./backend:/app
     deploy:
-      replicas: 3    
+      replicas: 5
     depends_on:
       - rabbitmq
       - backend
+      - mongo
     networks:
       - app-network
-    restart: unless-stopped
+    restart: always
 
 volumes:
-  mongo_data:
-  redis_data:
-  code_submissions:
+  mongo-data:
+    driver: local
   rabbit_data:
+    driver: local
 
 networks:
   app-network:

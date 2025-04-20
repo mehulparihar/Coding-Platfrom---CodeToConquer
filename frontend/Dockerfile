@@ -1,5 +1,5 @@
 # Use Node.js image for building the frontend.
-FROM node:18
+FROM node:20.19.0
 
 WORKDIR /app
 
@@ -11,13 +11,10 @@ COPY package*.json ./
 RUN npm install
 
 # Copy the frontend code.
-COPY frontend/ ./frontend/
+COPY . .
 
 # Change working directory to frontend.
-WORKDIR /app/frontend
-
-# Expose port 5173 (the default port for Vite in development).
-EXPOSE 5173
+Expose 5173
 
 # For development, run the Vite development server.
 CMD ["npm", "run", "dev"]

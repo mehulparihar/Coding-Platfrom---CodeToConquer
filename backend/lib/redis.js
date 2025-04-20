@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { promisify } from "util";
 
 dotenv.config();
-
+console.log(process.env.REDIS_URL);
 const client = redis.createClient({
     url: process.env.REDIS_URL,
     socket: {
@@ -21,8 +21,6 @@ const connectRedis = async () => {
         console.error('Redis connection failed:', error);
     }
 };
-
-
 
 export {
     client,

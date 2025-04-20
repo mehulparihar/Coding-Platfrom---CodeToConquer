@@ -75,6 +75,7 @@ export const logout = async (req, res) => {
 };
 
 export const login = async (req, res) => {
+    console.log("called login");
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email });

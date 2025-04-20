@@ -1,17 +1,16 @@
-FROM node:18-alpine
+FROM node:20.19.0
 
 # First copy package files from root
 WORKDIR /app
+
 COPY package*.json ./
 # RUN npm ci
-RUN npm install --production
+RUN npm install
 
 # Then copy backend code
-COPY backend/ ./backend
+COPY . .
+
+Expose 5000
 
 # Set final working directory
-WORKDIR /app/backend
-
-EXPOSE 5000
-
-CMD ["npm", "run", "dev"]
+CMD [ "npm", "run", "dev" ]

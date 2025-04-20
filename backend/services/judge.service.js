@@ -7,6 +7,7 @@ import amqplib from "amqplib";
 import DailyChallenge from "../models/DailyChallenge.model.js";
 import Contest from "../models/contest.model.js";
 import Battle from "../models/battle.model.js";
+import { connectDB } from "../lib/db.js";
 
 const docker = new Docker();
 const RABBITMQ_URL = process.env.RABBITMQ_URL;
@@ -143,7 +144,7 @@ const runCodeInContainer = async (submission, testCase) => {
 
     container = await docker.createContainer({
       Image: getImage(submission.language),
-      Cmd: ["sh", "-c", "sleep 2"],
+      Cmd: ["sh", "-c", "tail -f /dev/null"],
       HostConfig: {
         AutoRemove: true,
         Memory: 536870912,
@@ -155,6 +156,7 @@ const runCodeInContainer = async (submission, testCase) => {
     });
 
     await container.start();
+    console.log("Container started");
 
     const buildExec = await container.exec({
       Cmd: buildCommand(submission),
@@ -175,6 +177,7 @@ const runCodeInContainer = async (submission, testCase) => {
         stream.on("error", reject);
       });
     });
+
 
     const exec = await container.exec({
       Cmd: [
@@ -199,6 +202,7 @@ const runCodeInContainer = async (submission, testCase) => {
         stream.on("error", reject);
       });
     });
+    console.log("Runtime Output:\n", output);
     return {
       output,
       status: output ? "Completed" : "Runtime Error",
@@ -214,18 +218,19 @@ const runCodeInContainer = async (submission, testCase) => {
 const processSubmission = async (submissionId) => {
   try {
     const submission = await Submission.findById(submissionId)
-    .populate("problem")
-    .populate("user")
-    .populate("contest")
-    .populate("battle");
-    
+      .populate("problem")
+      .populate("user")
+      .populate("contest")
+      .populate("battle");
+
     const isContestSubmission = !!submission.contest;
     const isBattleSubmission = !!submission.battle;
     const results = [];
-    
+
     for (const testCase of submission.problem.testCases) {
       const result = await runCodeInContainer(submission, testCase);
       const passed = result.output === testCase.expected_output.trim();
+      console.log("Test Passed:", passed);
       results.push({
         input: testCase.input,
         expected: testCase.expected_output,
@@ -233,8 +238,10 @@ const processSubmission = async (submissionId) => {
         passed,
       });
     }
-    
+
     const allPassed = results.every((r) => r.passed);
+    console.log("All Passed:", allPassed);
+
 
     await Submission.findByIdAndUpdate(submissionId, {
       status: allPassed ? "Accepted" : "Wrong Answer",
@@ -284,6 +291,7 @@ const processSubmission = async (submissionId) => {
       );
     }
   } catch (error) {
+    console.error(`Error processing ${submissionId}:`, error);
     await Submission.findByIdAndUpdate(submissionId, {
       result: "Runtime Error",
       error: error.message,
@@ -293,17 +301,29 @@ const processSubmission = async (submissionId) => {
 
 
 const startJudgeWorker = async () => {
-  while (true) {
-    const connection = await amqplib.connect(RABBITMQ_URL);
-    const channel = await connection.createChannel();
-    await channel.assertQueue("submissions");
-    channel.consume("submissions", async (msg) => {
+  await connectDB();
+  const connection = await amqplib.connect(RABBITMQ_URL);
+  const channel = await connection.createChannel();
+  await channel.assertQueue("submissions");
+  channel.prefetch(1);
+
+  channel.consume("submissions", async (msg) => {
+    if(!msg) return;
+    try {
       const { submissionId } = JSON.parse(msg.content.toString());
+      console.log("Processing submission:", submissionId);
       await processSubmission(submissionId);
       channel.ack(msg);
-    });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
+    } catch (error) {
+      console.error("Failed to process message:", err);
+      channel.nack(msg, false, false);
+    }
+  });
 };
+
+startJudgeWorker().catch(err => {
+  console.error("Fatal error in judge worker:", err);
+  process.exit(1);
+});
 
 export { startJudgeWorker, runCodeInContainer };

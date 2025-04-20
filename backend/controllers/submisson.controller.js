@@ -27,7 +27,7 @@ export const submitCode = async (req, res) => {
                 testCases: problem.testCases,
             }))
         );
-
+            
         res.status(202).json(submission);
 
     } catch (err) {

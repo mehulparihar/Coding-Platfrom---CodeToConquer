@@ -6,7 +6,7 @@ import { connectRedis } from "./lib/redis.js";
 import authRoutes from "./routes/auth.route.js"
 import problemsRoutes from "./routes/problems.route.js"
 import submissionRoutes from "./routes/submission.route.js"
-import { startJudgeWorker } from "./services/judge.service.js";
+// import { startJudgeWorker } from "./services/judge.service.js";
 import http from 'http';
 import contestRoutes from "./routes/contest.route.js"
 import cron from "./utils/cron.utils.js"
@@ -24,7 +24,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cookieParser());
 app.use(cors({
-    origin: "http://localhost:5173", 
+    origin: true,
     credentials: true
 }));
 app.use(express.json({ limit: "10mb" }));
@@ -39,9 +39,9 @@ app.use("/api/leaderboard", leaderboardRoutes);
 const startServer = async () => {
     await connectDB();
     await connectRedis();
-    startJudgeWorker();
+    // startJudgeWorker();
     socketHandler(httpServer);
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, '0.0.0.0', () => {
         console.log("Server is running on port", PORT);
     });
 }
