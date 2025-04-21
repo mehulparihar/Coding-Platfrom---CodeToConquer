@@ -43,13 +43,13 @@ if(process.env.NODE_ENV === "production"){
     });
 }
 
-const startServer = async () => {
-    httpServer.listen(PORT, () => {
-        await connectDB();
+
+httpServer.listen(PORT, () => {
+        connectDB();
         startJudgeWorker();
         socketHandler(httpServer);
         console.log("Server is running on port", PORT);
-    });
-}
+});
 
-startServer();
+
+
