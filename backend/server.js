@@ -26,10 +26,6 @@ const __dirname = path.resolve();
 const PORT = process.env.PORT || 5000;
 
 app.use(cookieParser());
-app.use(cors({
-    origin: true,
-    credentials: true
-}));
 app.use(express.json({ limit: "10mb" }));
 
 app.use("/api/auth", authRoutes);
@@ -48,10 +44,10 @@ if(process.env.NODE_ENV === "production"){
 }
 
 const startServer = async () => {
-    await connectDB();
-    startJudgeWorker();
-    socketHandler(httpServer);
-    httpServer.listen(PORT, '0.0.0.0', () => {
+    httpServer.listen(PORT, () => {
+        await connectDB();
+        startJudgeWorker();
+        socketHandler(httpServer);
         console.log("Server is running on port", PORT);
     });
 }
